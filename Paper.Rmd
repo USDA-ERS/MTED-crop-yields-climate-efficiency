@@ -8,6 +8,20 @@ knitr::opts_chunk$set(echo = TRUE, cache.lazy = FALSE)
 cache = TRUE
 ```
 
+
+# Introduction
+
+
+# Data
+
+
+$$ y_t  = \alpha_0 + \alpha_1 y_t$$
+where ${{\alpha }_{1}}$ is the county yield intercept, $f\left( t \right)$ is the county’s estimated yield trend through time and ${{\varepsilon }_{t}}$ is the county’s residual yield variation. The following set of linear or nonlinear functional form of $f\left( t \right)$ is evaluated: 
+
+## Crops data
+
+We obtained the crops data... 
+
 ```{r prepare-crops-data, cache=cache, echo = FALSE}
 
 # Specify the date-dependent component of the data file name
@@ -511,11 +525,17 @@ rm(PRODUCTION)
 
 ```
 
+### Detrending crops data
+
 ```{r detrend-yield-data, caceh = cache, echo = FALSE}
 
-unique(countyData[,c('COUNTY_ANSI','COMMODITY_DESC')])
+#unique(countyData[,c('COUNTY_ANSI','COMMODITY_DESC')])
 
 ```
+
+## Climate data
+
+
 
 ```{r prepare-weather-data, cache = cache, echo = FALSE}
 
@@ -671,17 +691,17 @@ parallel::stopCluster(cl)
 
 
 
-<!-- ```{r echo = FALSE} -->
+```{r echo = FALSE, fig.cap='Counties covered by climate data'}
 
-<!-- countiesOnMap = maps::map('county',plot=FALSE) -->
+countiesOnMap = maps::map('county',plot=FALSE)
 
-<!-- countiesWithPreciptiation = maps::county.fips[maps::county.fips$fips %in% unique(precipitationMonthly$FIPS),] -->
+countiesWithPreciptiation = maps::county.fips[maps::county.fips$fips %in% unique(precipitationMonthly$FIPS),]
 
-<!-- countiesOnMap$col = ifelse(countiesOnMap$names %in% countiesWithPreciptiation$polyname,'blue','white') -->
+countiesOnMap$col = ifelse(countiesOnMap$names %in% countiesWithPreciptiation$polyname,'blue','white')
 
-<!-- maps::map('county',plot=TRUE, col = countiesOnMap$col, fill = TRUE) -->
+maps::map('county',plot=TRUE, col = countiesOnMap$col, fill = TRUE)
 
 
-<!-- ``` -->
+```
 
 
