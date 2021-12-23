@@ -37,3 +37,16 @@ vignettes/*.pdf
 
 # R Environment Variables
 .Renviron
+Paper_files
+Paper_cache
+*.cpg
+*.dbf
+*.prj
+*.shp
+*.xml
+*.shx
+*.csv
+*.zip
+*.pdf
+*.gz
+*.Rproj
