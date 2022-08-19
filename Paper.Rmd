@@ -1,6 +1,8 @@
 ---
 title: "Climate efficiency"
-output: pdf_document
+output:
+  word_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
