@@ -11,697 +11,798 @@ cache = TRUE
 
 # Introduction
 
+Climate change represents a major challenge for global agriculture: the past changes in the climate have resulted in major geographical shifts of agroecological zones which have require adaptation and shift in production. In addition to this, farmers are now subjected to more volatile weather conditions represented by more frequent extreme events. 
+
+With such major implications of the climate for the global production patterns, it is not surprising that a lot of effort has been directed into understanding the impacts of the new climate patterns, especially for the costs of production and yields. The new climate represents a new redistribution of the endowment of resources, which may mean welfare gains or, more frequently, losses depending on how the climate changes for each plot of land. In some cases, adaptation is beneficial, though costly, requiring investments in research and development of new farming techniques and new, often more resilient, crop varieties which are better adapted to the attributes of the new climate.
+
+The continuous changes to climate represents another distinct cost to the society, represented by the fact that farmers may not fully understand the new climate conditions that they operate in, resulting in less than efficient use of the climate endowments. In this paper, we focus on estimating one particular component of the cost of this inefficiency: the loss to yields coming from the fact that the updated climate is not utilized to its fullest potential. We do not concern ourselves with the losses from planting crops that are less optimal for the new climate--we leave this question to the future research.
 
 # Data
 
 
-$$ y_t  = \alpha_0 + \alpha_1 y_t$$
-where ${{\alpha }_{1}}$ is the county yield intercept, $f\left( t \right)$ is the county’s estimated yield trend through time and ${{\varepsilon }_{t}}$ is the county’s residual yield variation. The following set of linear or nonlinear functional form of $f\left( t \right)$ is evaluated: 
-
-## Crops data
-
-We obtained the crops data... 
-
-```{r prepare-crops-data, cache=cache, echo = FALSE}
-
-# Specify the date-dependent component of the data file name
-yrdd='20211223'
-
-# Download the file
-download.file(sprintf('ftp://ftp.nass.usda.gov/quickstats/qs.crops_%s.txt.gz',yrdd),sprintf('qs.crops_%s.txt.gz',yrdd), mode='wb')
-
-# Read the file into an object
-ss= read.csv(sprintf('qs.crops_%s.txt.gz',yrdd), sep='\t')
-
-# Replace STATE_ANSI with 99 for US TOTALS
-ss$STATE_ANSI = ifelse(ss$STATE_NAME=='US TOTAL',99,ss$STATE_ANSI)
-
-# Subset only needed data into object SS1
-ss1 = ss[ss$SOURCE_DESC %in% c('SURVEY') &
-           ss$STATISTICCAT_DESC %in% c('AREA HARVESTED',
-                                       'AREA PLANTED',
-                                       'AREA PLANTED, NET',
-                                       'PRICE RECEIVED',
-                                       'PRODUCTION',
-                                       'YIELD',
-                                       'STOCKS',
-                                       'SALES') & 
-           ss$AGG_LEVEL_DESC %in% c('NATIONAL',
-                                    'STATE',
-                                    'AGRICULTURAL DISTRICT',
-                                    'COUNTY') & 
-           ss$FREQ_DESC %in% c('ANNUAL',
-                               'MONTHLY',
-                               'POINT IN TIME') &
-           ss$REFERENCE_PERIOD_DESC %in% c('MARKETING YEAR','YEAR',
-                                           'JAN','FEB','MAR','APR','MAY','JUN',
-                                           'JUL','AUG','SEP','OCT','NOV','DEC',
-                                           'FIRST OF DEC','FIRST OF JUN',
-                                           'FIRST OF MAR','FIRST OF SEP') & 
-           !ss$UNIT_DESC %in% c('OPERATIONS',
-                                'PCT',
-                                'PCT BY COLOR',
-                                'PCT BY GRADE',
-                                'PCT BY SIZE GROUP',
-                                'PCT BY TYPE',
-                              
-                                  'PCT OF MKTG YEAR',
-                                'PCT OF PARITY',
-                                'PCT OF PRODUCTION',
-                                'PCT OF TOTAL STOCKS') &
-           !ss$STATE_NAME %in% c('OTHER STATES') &
-           !ss$ASD_DESC %in% c('OTHER DISTRICTS, ALL COUNTIES') &
-           !ss$COUNTY_NAME %in% c("OTHER (COMBINED) COUNTIES",
-                                  'OTHER COUNTIES'), ] 
-
-# Values contain illegal commas--only extract the numerals and turn the column into numeric
-ss1$VALUE_num <- as.numeric(gsub('[^0-9\\.]','',ss1$VALUE, perl = TRUE))
-
-
-# Remove all silage
-ss1=ss1[!ss1$UTIL_PRACTICE_DESC %in% c('SILAGE','FORAGE'),]
-
-ss1$UTIL_PRACTICE_DESC = ifelse(ss1$COMMODITY_DESC
-                               %in% c('CORN','SORGHUM'),'GRAIN',
-                               ss$UTIL_PRACTICE_DESC)
-
-# Define mappings
-mapping = list(
-  'FOOD GRAINS' = c('RICE', 'RYE', 'WHEAT'),
-  'FEED CROPS' = c(
-    'BARLEY',
-    'CORN',
-    'HAY',
-    'MILLET',
-    'OATS',
-    'PROSO MILLET',
-    'SORGHUM'
-  ),
-  'FIBER' = c(
-    'COTTON',
-    'COTTON LINT',
-    'COTTON LINT, LONG STAPLE',
-    'COTTON LINT, UPLAND',
-    'COTTONSEED'
-  ),
-  TOBACCO = 'TOBACCO',
-  'OIL CROPS' = c(
-    'CAMELINA',
-    'CANOLA',
-    'FLAXSEED',
-    'MISCELLANEOUS OIL CROPS',
-    'MUSTARD',
-    'MUSTARD SEED',
-    'PEANUTS',
-    'RAPESEED',
-    'SAFFLOWER',
-    'SOYBEANS',
-    'SUNFLOWER'
-  ),
-  
-  'VEGETABLES AND MELONS(DRY PULSES-BEANS)' = c (
-    'BEANS',
-    'BEANS, GREEN LIMA',
-    'BEANS, GREEN LIMA, PROCESSING',
-    'BEANS, SNAP',
-    'BEANS, SNAP, FRESH',
-    'BEANS, SNAP, PROCESSING',
-    'DRY BEANS',
-    'LEGUMES'
-  ) ,
-  'VEGETABLES AND MELONS(DRY PULSES-PEAS)' = c(
-    'CHICKPEAS',
-    'DRY PEAS',
-    'DRY PEAS, AUSTRIAN WINTER',
-    'DRY PEAS, EDIBLE',
-    'DRY PEAS, WRINKLED SEED',
-    'LENTILS',
-    'PEAS'
-  ),
-  'VEGETABLES AND MELONS(POTATOES)' = c (
-    'POTATOES',
-    'POTATOES, FALL',
-    'POTATOES, SPRING',
-    'POTATOES, SUMMER',
-    'SWEET POTATOES',
-    'TARO'
-  ),
-  'VEGETABLES AND MELONS(SPECIALTY)' = c(
-    'ARTICHOKES',
-    'ASPARAGUS',
-    'BEETS',
-    'BROCCOLI',
-    'BRUSSELS SPROUTS',
-    'CABBAGE',
-    'CABBAGE, FRESH',
-    'CANTALOUPS',
-    'CARROTS',
-    'CARROTS, FRESH',
-    'CARROTS, PROCESSING',
-    'CAULIFLOWER',
-    'CELERY',
-    'CORN, SWEET',
-    'CORN, SWEET, FRESH',
-    'CORN, SWEET, PROCESSING',
-    'CUCUMBERS',
-    'CUCUMBERS, FRESH',
-    'CUCUMBERS, PROCESSING',
-    'EGGPLANT',
-    'ESCAROLE & ENDIVE',
-    'GARLIC',
-    'GREENS',
-    'GINGER ROOT',
-    'HONEYDEWS',
-    'LETTUCE',
-    'LETTUCE, HEAD',
-    'LETTUCE, LEAF',
-    'LETTUCE, ROMAINE',
-    'MELONS',
-    'OKRA',
-    'ONIONS',
-    'ONIONS, SPRING',
-    'ONIONS, STORAGE',
-    'ONIONS, SUMMER, NONSTORAGE',
-    'PEAS, GREEN',
-    'PEAS, GREEN, PROCESSING',
-    'PEPPERS',
-    'PEPPERS, CHILE',
-    'PEPPERS, BELL',
-    'PUMPKINS',
-    'RADISHES',
-    'SPINACH',
-    'SPINACH, FRESH',
-    'SPINACH, PROCESSING',
-    'SQUASH',
-    'SWEET CORN',
-    'TOMATOES',
-    'TOMATOES, FRESH',
-    'TOMATOES, PROCESSING',
-    'WATERMELON'
-  ),
-  
-  'FRUITS AND NUTS(FRUITS)' = c (
-    'APPLES',
-    'APRICOTS',
-    'AVOCADOS',
-    'BANANAS',
-    'BLACKBERRIES',
-    'BLACKBERRY GROUP',
-    'BOYSENBERRIES',
-    'BLUEBERRIES',
-    'CANEBERRIES',
-    'CHERRIES',
-    'CHERRIES, SWEET',
-    'CHERRIES, TART',
-    'COFFEE',
-    'CRANBERRIES',
-    'DATES',
-    'FIGS',
-    'GOOSEBERRIES',
-    'GRAPEFRUIT',
-    'GRAPES',
-    'GUAVAS',
-    'KIWIFRUIT',
-    'LEMONS',
-    'LIMES',
-    'LOGANBERRIES',
-    'NECTARINES',
-    'OLIVES',
-    'ORANGES',
-    'PAPAYAS',
-    'PEACHES',
-    'PEARS',
-    'PINEAPPLES',
-    'PLUMS',
-    'PLUMS AND PRUNES',
-    'PRUNES',
-    'RASPBERRIES',
-    'STRAWBERRIES',
-    'TANGELOS',
-    'TANGERINES'
-  ),
-  
-  'FRUITS AND NUTS(NUTS)' = c (
-    'ALMONDS',
-    'HAZELNUTS',
-    'MACADAMIA NUTS',
-    'MACADAMIAS',
-    'PECANS',
-    'PISTACHIOS',
-    'WALNUTS'
-  ),
-  SUGARS = c (
-    'MAPLE PRODUCTS',
-    'SUGAR BEETS',
-    'SUGARBEETS',
-    'SUGARCANE',
-    'SUGARCANE FOR SUGAR AND SEED'
-  ),
-  
-  'ALL OTHER CROPS' = c(
-    'FLORICULTURE',
-    'HOPS',
-    'MINT',
-    'MISCELLANEOUS CROPS',
-    'MUSHROOMS',
-    'PEPPERMINT OIL',
-    'SPEARMINT OIL'
-  ),
-  
-  'ONLY TOTALS' = c(
-    'BEDDING PLANT TOTALS',
-    'BERRY TOTALS',
-    'CITRUS TOTALS',
-    'CROP TOTALS',
-    'FIELD CROP & VEGETABLE TOTALS',
-    'FIELD CROP TOTALS',
-    'FLORICULTURE TOTALS',
-    'FOOD CROP TOTALS',
-    'FRUIT & TREE NUT TOTALS',
-    'FRUIT TOTALS',
-    'GRASSES & LEGUMES TOTALS',
-    'HORTICULTURE TOTALS',
-    'NON-CITRUS FRUIT & TREE NUTS TOTALS',
-    'NON-CITRUS TOTALS',
-    'NURSERY TOTALS',
-    'TREE NUT TOTALS',
-    'VEGETABLE TOTALS'
-  )
-  
-  
-)
-
-# Create a vector for mapping based on the list of commodities/groups
-mappingVector = Reduce(function(a,f){
-  for(ff in mapping[[f]]){
-    a[ff] = f
-  }
-  return(a)
-},names(mapping),c())
-
-
-ss1$COMMODITY_GROUP = mappingVector[ss1$COMMODITY_DESC]
-
-
-
-#Suggestions: Need to identify 
-# a) newly created names;
-# b) Existing Column names
-# c) Existing row names within each column
-
-
-#COUNTY DATA
-variableDefinitions = list(
-  'AREA HARVERSTED' = list(
-    NAME = 'HARVESTED',
-    STATISTICCAT = 'AREA HARVESTED',
-    UNIT_NAME = 'HA_UNITS',
-    UNIT = unique(ss1$UNIT_DESC),
-    FREQ = unique(ss1$FREQ_DESC),
-    REFERENCE = 'YEAR'
-    
-  ),
-  'AREA PLANTED' = list(
-    NAME = 'PLANTED',
-    STATISTICCAT = 'AREA PLANTED',
-    UNIT_NAME = 'PA_UNITS',
-    UNIT = unique(ss1$UNIT_DESC),
-    FREQ = unique(ss1$FREQ_DESC),
-    REFERENCE = 'YEAR'
-  ),
-  'YIELD' = list(
-    NAME = 'YIELD',
-    STATISTICCAT = 'YIELD',
-    UNIT_NAME = 'YLD_UNITS',
-    UNIT = c('BARRELS / ACRE', 'BOXES / ACRE', 'BU / ACRE',
-             'BU / PLANTED ACRE', 'CWT / ACRE', 'GALLONS / BOX',
-             'LB / ACRE', 'LB / ACRE, CHERRY BASIS',
-             'LB / SQ FT', 'TONS / ACRE', 'TONS / ACRE, DRY BASIS',
-             'TONS / ACRE, FRESH BASIS', 'TONS / ACRE, IN SHELL BASIS'),
-    FREQ = unique(ss1$FREQ_DESC),
-    REFERENCE = 'YEAR'
-    
-  ),
-  'PRODUCTION' = list(
-    NAME = 'PRODUCTION',
-    STATISTICCAT = 'PRODUCTION',
-    UNIT_NAME = 'PROD_UNITS',
-    UNIT = setdiff(unique(ss1$UNIT_DESC),c('$',
-                                            '$ / TON',
-                                            '$, CHERRY BASIS',
-                                            '$, ON TREE EQUIV',
-                                            '$, PHD EQUIV')),
-    FREQ = unique(ss1$FREQ_DESC),
-    REFERENCE = 'YEAR'
-    
-  )
-  
-)
-
-columnsToKeep = c('COMMODITY_GROUP','SOURCE_DESC',
-        'SECTOR_DESC','GROUP_DESC','COMMODITY_DESC','CLASS_DESC',
-        'PRODN_PRACTICE_DESC','UTIL_PRACTICE_DESC','AGG_LEVEL_DESC',
-        'STATE_ANSI','STATE_NAME','ASD_CODE','ASD_DESC','COUNTY_ANSI',
-        'COUNTY_NAME','YEAR','FREQ_DESC')
-
-e=environment()
-
-for(vv in variableDefinitions){
-  e[[vv$NAME]] =   ss1[ss1$STATISTICCAT_DESC %in% c(vv$STATISTICCAT) & 
-                         ss1$UNIT_DESC %in% c(vv$UNIT) &
-                         ss1$FREQ_DESC %in% c(vv$FREQ) &
-                         ss1$REFERENCE_PERIOD_DESC %in% c(vv$REFERENCE), ]
-  e[[vv$NAME]][[vv$NAME]] = e[[vv$NAME]][['VALUE_num']]
-  e[[vv$NAME]][[vv$UNIT_NAME]] = e[[vv$NAME]]$UNIT_DESC
-  e[[vv$NAME]] = e[[vv$NAME]][,c(columnsToKeep,vv$NAME,
-                                 vv$UNIT_NAME)]
-}
-
-countyTables = unlist(Map(function(f)f$NAME, variableDefinitions))
-
-
-countyData = Reduce(function(a, f) {
-  return(merge(a, f, by = columnsToKeep, all = TRUE))
-}, Map(function(f)
-  e[[f]], countyTables[2:length(countyTables)]), e[[countyTables[1]]])
-
-countyData=countyData[countyData$COMMODITY_DESC=='CORN',]
-
-
-rm(e)
-rm(ss)
-rm(ss1)
-rm(HARVESTED)
-rm(YIELD)
-rm(PLANTED)
-rm(PRODUCTION)
-
-
-
-# #STATE DATA
-# ################################################################
-# variableDefinitions_ST = list(
-#   'REVENUE' = list(
-#     NAME = 'REVENUE',
-#     STATISTICCAT = 'PRODUCTION',
-#     UNIT_NAME = 'PROD_UNITS',
-#     UNIT = c('$', '$, CHERRY BASIS', 
-#              '$, ON TREE EQUIV', '$, PHD EQUIV'),
-#     FREQ = 'ANNUAL',
-#     REFERENCE = 'YEAR'
-#     
-#   ),
-#   'MARKETING YEAR PRICES' = list(
-#     NAME = 'MARKETING YEAR',
-#     STATISTICCAT = 'PRICE RECEIVED',
-#     UNIT_NAME = 'MYP_UNITS',
-#     UNIT = c("$ / BOX, ON TREE EQUIV", "$ / BOX, PHD EQUIV", "$ / LB", "$ / GALLON", 
-#              "$ / BARREL", "CENTS / LB", "$ / BOX", "$ / CWT", "$ / BU", "$ / TON", 
-#              "$ / TON, DRY BASIS", "$ / CONTAINER", "$ / BOX, FOB", "$ / LB, CHERRY BASIS", 
-#              "$ / LB, GREEN BASIS", "$ / TON, FRESH BASIS"),
-#     FREQ = 'ANNUAL',
-#     REFERENCE = 'MARKETING YEAR'
-#     
-#   ),
-#   'CALENDAR YEAR PRICES' = list(
-#     NAME = 'CALENDAR YEAR',
-#     STATISTICCAT = 'PRICE RECEIVED',
-#     UNIT_NAME = 'CYP_UNITS',
-#     UNIT = c("$ / LB", "$ / CWT", "$ / BU", "$ / TON", "$ / CONTAINER", 
-#              "$ / POT", "$ / FLAT", "$ / BUNCH", "CENTS / SPIKE", "CENTS / STEM", 
-#              "CENTS / BLOOM", "$ / BASKET", "$ / LB, CHERRY BASIS", "$ / LB, GREEN BASIS"
-#     ),
-#     FREQ = 'ANNUAL',
-#     REFERENCE = 'YEAR'
-#     
-#   )
-# 
-# )
-# 
-# columnsToKeep_ST = c('COMMODITY_GROUP','SOURCE_DESC',
-#                   'SECTOR_DESC','GROUP_DESC','COMMODITY_DESC','CLASS_DESC',
-#                   'PRODN_PRACTICE_DESC','UTIL_PRACTICE_DESC','AGG_LEVEL_DESC',
-#                   'STATE_ANSI','STATE_NAME','YEAR','FREQ_DESC')
-# 
-# e=environment()
-# 
-# for(vv in variableDefinitions_ST){
-#   e[[vv$NAME]] =   ss1[ss1$STATISTICCAT_DESC %in% c(vv$STATISTICCAT) & 
-#                          ss1$UNIT_DESC %in% c(vv$UNIT) &
-#                          ss1$FREQ_DESC %in% c(vv$FREQ) &
-#                          ss1$REFERENCE_PERIOD_DESC %in% c(vv$REFERENCE), ]
-#   e[[vv$NAME]][[vv$NAME]] = e[[vv$NAME]][['VALUE_num']]
-#   e[[vv$NAME]][[vv$UNIT_NAME]] = e[[vv$NAME]]$UNIT_DESC
-#   e[[vv$NAME]] = e[[vv$NAME]][,c(columnsToKeep_ST,vv$NAME,
-#                                  vv$UNIT_NAME)]
-# }
-# 
-# stateTables = unlist(Map(function(f)f$NAME, variableDefinitions_ST))
-# 
-# 
-# stateData = Reduce(function(a, f) {
-#   return(merge(a, f, by = columnsToKeep_ST, all = TRUE))
-# }, Map(function(f)
-#   e[[f]], stateTables[2:length(stateTables)]), e[[stateTables[1]]])
-# ################################################################
-# stateDatacorn <- subset(stateData, 
-#                           stateData$COMMODITY_DESC=='CORN' &
-#                             stateData$AGG_LEVEL_DESC=='NATIONAL')
-# 
-# 
-# 
-# 
-# 
-# #STATE DATA - MONTHLY
-# ################################################################
-# variableDefinitions_ST_m = list(
-#   'MONTHLY PRICES' = list(
-#     NAME = 'MONTHLY PRICES',
-#     STATISTICCAT = 'PRICE RECEIVED',
-#     UNIT_NAME = 'MP_UNITS',
-#     UNIT = c("$ / BOX, ON TREE EQUIV", "$ / BOX, PHD EQUIV", "$ / LB", "$ / GALLON", 
-#              "$ / BARREL", "CENTS / LB", "$ / BOX", "$ / CWT", "$ / BU", "$ / TON", 
-#              "$ / TON, DRY BASIS", "$ / CONTAINER", "$ / BOX, FOB", "$ / LB, CHERRY BASIS", 
-#              "$ / LB, GREEN BASIS", "$ / TON, FRESH BASIS"),
-#     FREQ = 'MONTHLY',
-#     REFERENCE = c('JAN','FEB','MAR','APR','MAY','JUN',
-#                   'JUL','AUG','SEP','OCT','NOV','DEC')
-#   )
-# )
-# 
-# columnsToKeep_ST_m = c('COMMODITY_GROUP','SOURCE_DESC',
-#                        'SECTOR_DESC','GROUP_DESC','COMMODITY_DESC','CLASS_DESC',
-#                        'PRODN_PRACTICE_DESC','UTIL_PRACTICE_DESC','AGG_LEVEL_DESC',
-#                        'STATE_ANSI','STATE_NAME','YEAR','FREQ_DESC')
-# 
-# `MONTHLY PRICES AGG` = aggregate(`MONTHLY PRICES`~., `MONTHLY PRICES`, mean)
-# 
-# stateDataM = merge(stateData, `MONTHLY PRICES AGG`, all.x=TRUE, by.x = c('MYP_UNITS', setdiff(columnsToKeep_ST,'FREQ_DESC')),by.y = c('MP_UNITS', setdiff(columnsToKeep_ST,'FREQ_DESC')))
-# 
-# e=environment()
-# 
-# for(vv in variableDefinitions_ST_m){
-#   e[[vv$NAME]] =   ss1[ss1$STATISTICCAT_DESC %in% c(vv$STATISTICCAT) & 
-#                          ss1$UNIT_DESC %in% c(vv$UNIT) &
-#                          ss1$FREQ_DESC %in% c(vv$FREQ) &
-#                          ss1$REFERENCE_PERIOD_DESC %in% c(vv$REFERENCE), ]
-#   e[[vv$NAME]][[vv$NAME]] = e[[vv$NAME]][['VALUE_num']]
-#   e[[vv$NAME]][[vv$UNIT_NAME]] = e[[vv$NAME]]$UNIT_DESC
-#   e[[vv$NAME]] = e[[vv$NAME]][,c(columnsToKeep_ST,vv$NAME,
-#                                  vv$UNIT_NAME)]
-# }
-# 
-# stateTables_m = unlist(Map(function(f)f$NAME, variableDefinitions_ST_m))
-# 
-# 
-# stateData_m = Reduce(function(a, f) {
-#   return(merge(a, f, by = columnsToKeep_ST_m, all = TRUE))
-# }, Map(function(f)
-#   e[[f]], stateTables_m[2:length(stateTables_m)]), e[[stateTables_m[1]]])
-# ################################################################
-# 
-# 
-# 
-
-```
-
-### Detrending crops data
-
-```{r detrend-yield-data, caceh = cache, echo = FALSE}
-
-#unique(countyData[,c('COUNTY_ANSI','COMMODITY_DESC')])
-
-```
-
-## Climate data
-
-
-
-```{r prepare-weather-data, cache = cache, echo = FALSE}
-
-precipitation = read.csv('ftp://ftp.ncdc.noaa.gov/pub/data/cirs/climdiv/climdiv-pcpncy-v1.0.0-20211206',sep='\t', header = FALSE)
-temperature = read.csv('ftp://ftp.ncdc.noaa.gov/pub/data/cirs/climdiv/climdiv-tmpccy-v1.0.0-20211206',sep='\t', header = FALSE)
-
-
-mapState = c(
-  `01`='01',
-`02`='04',
-`03`='05',
-`04`='06',
-`05`='08',
-`06`='09',
-`07`='10',
-`08`='12',
-`09`='13',
-`10`='16',
-`11`='17',
-`12`='18',
-`13`='19',
-`14`='20',
-`15`='21',
-`16`='22',
-`17`='23',
-`18`='24',
-`19`='25',
-`20`='26',
-`21`='27',
-`22`='28',
-`23`='29',
-`24`='30',
-`25`='31',
-`26`='32',
-`27`='33',
-`28`='34',
-`29`='35',
-`30`='36',
-`31`='37',
-`32`='38',
-`33`='39',
-`34`='40',
-`35`='41',
-`36`='42',
-`37`='44',
-`38`='45',
-`39`='46',
-`40`='47',
-`41`='48',
-`42`='49',
-`43`='50',
-`44`='51',
-`45`='53',
-`46`='54',
-`47`='55',
-`48`='56'
-)
-
-precipitationFormatted = within(precipitation,{
-  FIPS = as.numeric(paste0(mapState[substr(V1,1,2)], substr(V1,3,5)))
-  element = substr(V1,6,7)
-  year = as.numeric(substr(V1,8,11))
-  `01` =  as.numeric(substr(V1,12,18))
-  `02` =  as.numeric(substr(V1,19,25))
-  `03` =  as.numeric(substr(V1,26,32))
-  `04` =  as.numeric(substr(V1,33,39))
-  `05` =  as.numeric(substr(V1,40,46))
-  `06` =  as.numeric(substr(V1,47,53))
-  `07` =  as.numeric(substr(V1,54,60))
-  `08` =  as.numeric(substr(V1,61,67))
-  `09` =  as.numeric(substr(V1,68,74))
-  `10` =  as.numeric(substr(V1,75,81))
-  `11` =  as.numeric(substr(V1,82,88))
-  `12` =  as.numeric(substr(V1,89,95))
-  V1=NULL
-})
-
-temperatureFormatted = within(temperature,{
-  FIPS = as.numeric(paste0(mapState[substr(V1,1,2)], substr(V1,3,5)))
-  element = substr(V1,6,7)
-  year = as.numeric(substr(V1,8,11))
-  `01` =  as.numeric(substr(V1,12,18))
-  `02` =  as.numeric(substr(V1,19,25))
-  `03` =  as.numeric(substr(V1,26,32))
-  `04` =  as.numeric(substr(V1,33,39))
-  `05` =  as.numeric(substr(V1,40,46))
-  `06` =  as.numeric(substr(V1,47,53))
-  `07` =  as.numeric(substr(V1,54,60))
-  `08` =  as.numeric(substr(V1,61,67))
-  `09` =  as.numeric(substr(V1,68,74))
-  `10` =  as.numeric(substr(V1,75,81))
-  `11` =  as.numeric(substr(V1,82,88))
-  `12` =  as.numeric(substr(V1,89,95))
-  V1=NULL
-})
-
-
-precipitationMonthly =  reshape2::melt(precipitationFormatted, id.vars = c('year','element','FIPS'))
-temperatureMonthly =  reshape2::melt(temperatureFormatted, id.vars = c('year','element','FIPS'))
-
-
-precipitationMonthly$date = as.Date(sprintf('%s-%s-01', precipitationMonthly$year, precipitationMonthly$variable))
-temperatureMonthly$date = as.Date(sprintf('%s-%s-01', temperatureMonthly$year, temperatureMonthly$variable))
-
-precipitationMonthly = precipitationMonthly[complete.cases(precipitationMonthly) & precipitationMonthly$value>0,]
-temperatureMonthly = temperatureMonthly[complete.cases(temperatureMonthly) & temperatureMonthly$value>0,]
-
-```
-
-```{r prepare-weather-moments-data, cache = cache, echo = FALSE}
-
-
-precipitationAnnual =  aggregate(value~FIPS+year, precipitationMonthly, mean)
-temperatureAnnual =  aggregate(value~FIPS+year, temperatureMonthly, mean)
-
-
-fipsYears = merge(precipitationAnnual,temperatureAnnual, by=c('FIPS','year'), suffixes=c('prec','temp'))
-
-cl = parallel::makeCluster(parallel::detectCores())
-
-parallel::clusterExport(cl,c('fipsYears'))
-
-tictoc::tic()
-
-parResults = parallel::parLapply(cl,1:NROW(fipsYears), function(nn){
-  curRow = fipsYears[nn,]
-  
-  relData = fipsYears[fipsYears$FIPS==curRow$FIPS & fipsYears$year %in% (curRow$year-29):curRow$year,]
-  
-  if(NROW(relData)==30){
-  tempMoments = moments::all.moments(relData$valuetemp, order.max = 4, central = TRUE)
-  precMoments = moments::all.moments(relData$valueprec, order.max = 4, central = TRUE)
-
-  curRow[1,c('meantemp','varitemp','skewtemp','kurttemp')] = c(mean(relData$valuetemp),tempMoments[3:5])
-  curRow[1,c('meanprec','variprec','skewprec','kurtprec')] = c(mean(relData$valueprec),precMoments[3:5])
-
-  } else {
-      curRow[1,c('meantemp','varitemp','skewtemp','kurttemp')] = c(NA,NA,NA,NA)
-      curRow[1,c('meanprec','variprec','skewprec','kurtprec')] = c(NA,NA,NA,NA)
-
-  }
-  return(curRow)
-  
-})
-tictoc::toc()
-
-completeClimateData=  do.call(rbind, Map(function(f) f[complete.cases(f),], parResults))
-
-
-parallel::stopCluster(cl)
-
-```
-
-
-
-```{r echo = FALSE, fig.cap='Counties covered by climate data'}
-
-countiesOnMap = maps::map('county',plot=FALSE)
-
-countiesWithPreciptiation = maps::county.fips[maps::county.fips$fips %in% unique(precipitationMonthly$FIPS),]
-
-countiesOnMap$col = ifelse(countiesOnMap$names %in% countiesWithPreciptiation$polyname,'blue','white')
-
-maps::map('county',plot=TRUE, col = countiesOnMap$col, fill = TRUE)
-
-
-```
+<!-- ## Crops data -->
+
+<!-- We obtained the crops data...  -->
+
+<!-- ```{r prepare-crops-data, cache=cache, echo = FALSE} -->
+
+<!-- # Specify the date-dependent component of the data file name -->
+<!-- yrdd='20211229' -->
+
+<!-- # Download the file -->
+<!-- download.file(sprintf('ftp://ftp.nass.usda.gov/quickstats/qs.crops_%s.txt.gz',yrdd),sprintf('qs.crops_%s.txt.gz',yrdd), mode='wb', method = 'curl') -->
+
+<!-- # Read the file into an object -->
+<!-- ss= read.csv(sprintf('qs.crops_%s.txt.gz',yrdd), sep='\t') -->
+
+<!-- # Replace STATE_ANSI with 99 for US TOTALS -->
+<!-- ss$STATE_ANSI = ifelse(ss$STATE_NAME=='US TOTAL',99,ss$STATE_ANSI) -->
+
+<!-- # Subset only needed data into object SS1 -->
+<!-- ss1 = ss[ss$SOURCE_DESC %in% c('SURVEY') & -->
+<!--            ss$STATISTICCAT_DESC %in% c('AREA HARVESTED', -->
+<!--                                        'AREA PLANTED', -->
+<!--                                        'AREA PLANTED, NET', -->
+<!--                                        'PRICE RECEIVED', -->
+<!--                                        'PRODUCTION', -->
+<!--                                        'YIELD', -->
+<!--                                        'STOCKS', -->
+<!--                                        'SALES') &  -->
+<!--            ss$AGG_LEVEL_DESC %in% c('NATIONAL', -->
+<!--                                     'STATE', -->
+<!--                                     'AGRICULTURAL DISTRICT', -->
+<!--                                     'COUNTY') &  -->
+<!--            ss$FREQ_DESC %in% c('ANNUAL', -->
+<!--                                'MONTHLY', -->
+<!--                                'POINT IN TIME') & -->
+<!--            ss$PRODN_PRACTICE_DESC %in% c('ALL PRODUCTION PRACTICES') & -->
+<!--            ss$REFERENCE_PERIOD_DESC %in% c('MARKETING YEAR','YEAR', -->
+<!--                                            'JAN','FEB','MAR','APR','MAY','JUN', -->
+<!--                                            'JUL','AUG','SEP','OCT','NOV','DEC', -->
+<!--                                            'FIRST OF DEC','FIRST OF JUN', -->
+<!--                                            'FIRST OF MAR','FIRST OF SEP') &  -->
+<!--            !ss$UNIT_DESC %in% c('OPERATIONS', -->
+<!--                                 'PCT', -->
+<!--                                 'PCT BY COLOR', -->
+<!--                                 'PCT BY GRADE', -->
+<!--                                 'PCT BY SIZE GROUP', -->
+<!--                                 'PCT BY TYPE', -->
+
+<!--                                   'PCT OF MKTG YEAR', -->
+<!--                                 'PCT OF PARITY', -->
+<!--                                 'PCT OF PRODUCTION', -->
+<!--                                 'PCT OF TOTAL STOCKS') & -->
+<!--            !ss$STATE_NAME %in% c('OTHER STATES') & -->
+<!--            !ss$ASD_DESC %in% c('OTHER DISTRICTS, ALL COUNTIES') & -->
+<!--            !ss$COUNTY_NAME %in% c("OTHER (COMBINED) COUNTIES", -->
+<!--                                   'OTHER COUNTIES'), ]  -->
+
+<!-- # Values contain illegal commas--only extract the numerals and turn the column into numeric -->
+<!-- ss1$VALUE_num <- as.numeric(gsub('[^0-9\\.]','',ss1$VALUE, perl = TRUE)) -->
+
+
+<!-- # Remove all silage -->
+<!-- ss1=ss1[!ss1$UTIL_PRACTICE_DESC %in% c('SILAGE','FORAGE'),] -->
+
+<!-- ss1$UTIL_PRACTICE_DESC = ifelse(ss1$COMMODITY_DESC -->
+<!--                                %in% c('CORN','SORGHUM'),'GRAIN', -->
+<!--                                ss$UTIL_PRACTICE_DESC) -->
+
+<!-- # Define mappings -->
+<!-- mapping = list( -->
+<!--   'FOOD GRAINS' = c('RICE', 'RYE', 'WHEAT'), -->
+<!--   'FEED CROPS' = c( -->
+<!--     'BARLEY', -->
+<!--     'CORN', -->
+<!--     'HAY', -->
+<!--     'MILLET', -->
+<!--     'OATS', -->
+<!--     'PROSO MILLET', -->
+<!--     'SORGHUM' -->
+<!--   ), -->
+<!--   'FIBER' = c( -->
+<!--     'COTTON', -->
+<!--     'COTTON LINT', -->
+<!--     'COTTON LINT, LONG STAPLE', -->
+<!--     'COTTON LINT, UPLAND', -->
+<!--     'COTTONSEED' -->
+<!--   ), -->
+<!--   TOBACCO = 'TOBACCO', -->
+<!--   'OIL CROPS' = c( -->
+<!--     'CAMELINA', -->
+<!--     'CANOLA', -->
+<!--     'FLAXSEED', -->
+<!--     'MISCELLANEOUS OIL CROPS', -->
+<!--     'MUSTARD', -->
+<!--     'MUSTARD SEED', -->
+<!--     'PEANUTS', -->
+<!--     'RAPESEED', -->
+<!--     'SAFFLOWER', -->
+<!--     'SOYBEANS', -->
+<!--     'SUNFLOWER' -->
+<!--   ), -->
+
+<!--   'VEGETABLES AND MELONS(DRY PULSES-BEANS)' = c ( -->
+<!--     'BEANS', -->
+<!--     'BEANS, GREEN LIMA', -->
+<!--     'BEANS, GREEN LIMA, PROCESSING', -->
+<!--     'BEANS, SNAP', -->
+<!--     'BEANS, SNAP, FRESH', -->
+<!--     'BEANS, SNAP, PROCESSING', -->
+<!--     'DRY BEANS', -->
+<!--     'LEGUMES' -->
+<!--   ) , -->
+<!--   'VEGETABLES AND MELONS(DRY PULSES-PEAS)' = c( -->
+<!--     'CHICKPEAS', -->
+<!--     'DRY PEAS', -->
+<!--     'DRY PEAS, AUSTRIAN WINTER', -->
+<!--     'DRY PEAS, EDIBLE', -->
+<!--     'DRY PEAS, WRINKLED SEED', -->
+<!--     'LENTILS', -->
+<!--     'PEAS' -->
+<!--   ), -->
+<!--   'VEGETABLES AND MELONS(POTATOES)' = c ( -->
+<!--     'POTATOES', -->
+<!--     'POTATOES, FALL', -->
+<!--     'POTATOES, SPRING', -->
+<!--     'POTATOES, SUMMER', -->
+<!--     'SWEET POTATOES', -->
+<!--     'TARO' -->
+<!--   ), -->
+<!--   'VEGETABLES AND MELONS(SPECIALTY)' = c( -->
+<!--     'ARTICHOKES', -->
+<!--     'ASPARAGUS', -->
+<!--     'BEETS', -->
+<!--     'BROCCOLI', -->
+<!--     'BRUSSELS SPROUTS', -->
+<!--     'CABBAGE', -->
+<!--     'CABBAGE, FRESH', -->
+<!--     'CANTALOUPS', -->
+<!--     'CARROTS', -->
+<!--     'CARROTS, FRESH', -->
+<!--     'CARROTS, PROCESSING', -->
+<!--     'CAULIFLOWER', -->
+<!--     'CELERY', -->
+<!--     'CORN, SWEET', -->
+<!--     'CORN, SWEET, FRESH', -->
+<!--     'CORN, SWEET, PROCESSING', -->
+<!--     'CUCUMBERS', -->
+<!--     'CUCUMBERS, FRESH', -->
+<!--     'CUCUMBERS, PROCESSING', -->
+<!--     'EGGPLANT', -->
+<!--     'ESCAROLE & ENDIVE', -->
+<!--     'GARLIC', -->
+<!--     'GREENS', -->
+<!--     'GINGER ROOT', -->
+<!--     'HONEYDEWS', -->
+<!--     'LETTUCE', -->
+<!--     'LETTUCE, HEAD', -->
+<!--     'LETTUCE, LEAF', -->
+<!--     'LETTUCE, ROMAINE', -->
+<!--     'MELONS', -->
+<!--     'OKRA', -->
+<!--     'ONIONS', -->
+<!--     'ONIONS, SPRING', -->
+<!--     'ONIONS, STORAGE', -->
+<!--     'ONIONS, SUMMER, NONSTORAGE', -->
+<!--     'PEAS, GREEN', -->
+<!--     'PEAS, GREEN, PROCESSING', -->
+<!--     'PEPPERS', -->
+<!--     'PEPPERS, CHILE', -->
+<!--     'PEPPERS, BELL', -->
+<!--     'PUMPKINS', -->
+<!--     'RADISHES', -->
+<!--     'SPINACH', -->
+<!--     'SPINACH, FRESH', -->
+<!--     'SPINACH, PROCESSING', -->
+<!--     'SQUASH', -->
+<!--     'SWEET CORN', -->
+<!--     'TOMATOES', -->
+<!--     'TOMATOES, FRESH', -->
+<!--     'TOMATOES, PROCESSING', -->
+<!--     'WATERMELON' -->
+<!--   ), -->
+
+<!--   'FRUITS AND NUTS(FRUITS)' = c ( -->
+<!--     'APPLES', -->
+<!--     'APRICOTS', -->
+<!--     'AVOCADOS', -->
+<!--     'BANANAS', -->
+<!--     'BLACKBERRIES', -->
+<!--     'BLACKBERRY GROUP', -->
+<!--     'BOYSENBERRIES', -->
+<!--     'BLUEBERRIES', -->
+<!--     'CANEBERRIES', -->
+<!--     'CHERRIES', -->
+<!--     'CHERRIES, SWEET', -->
+<!--     'CHERRIES, TART', -->
+<!--     'COFFEE', -->
+<!--     'CRANBERRIES', -->
+<!--     'DATES', -->
+<!--     'FIGS', -->
+<!--     'GOOSEBERRIES', -->
+<!--     'GRAPEFRUIT', -->
+<!--     'GRAPES', -->
+<!--     'GUAVAS', -->
+<!--     'KIWIFRUIT', -->
+<!--     'LEMONS', -->
+<!--     'LIMES', -->
+<!--     'LOGANBERRIES', -->
+<!--     'NECTARINES', -->
+<!--     'OLIVES', -->
+<!--     'ORANGES', -->
+<!--     'PAPAYAS', -->
+<!--     'PEACHES', -->
+<!--     'PEARS', -->
+<!--     'PINEAPPLES', -->
+<!--     'PLUMS', -->
+<!--     'PLUMS AND PRUNES', -->
+<!--     'PRUNES', -->
+<!--     'RASPBERRIES', -->
+<!--     'STRAWBERRIES', -->
+<!--     'TANGELOS', -->
+<!--     'TANGERINES' -->
+<!--   ), -->
+
+<!--   'FRUITS AND NUTS(NUTS)' = c ( -->
+<!--     'ALMONDS', -->
+<!--     'HAZELNUTS', -->
+<!--     'MACADAMIA NUTS', -->
+<!--     'MACADAMIAS', -->
+<!--     'PECANS', -->
+<!--     'PISTACHIOS', -->
+<!--     'WALNUTS' -->
+<!--   ), -->
+<!--   SUGARS = c ( -->
+<!--     'MAPLE PRODUCTS', -->
+<!--     'SUGAR BEETS', -->
+<!--     'SUGARBEETS', -->
+<!--     'SUGARCANE', -->
+<!--     'SUGARCANE FOR SUGAR AND SEED' -->
+<!--   ), -->
+
+<!--   'ALL OTHER CROPS' = c( -->
+<!--     'FLORICULTURE', -->
+<!--     'HOPS', -->
+<!--     'MINT', -->
+<!--     'MISCELLANEOUS CROPS', -->
+<!--     'MUSHROOMS', -->
+<!--     'PEPPERMINT OIL', -->
+<!--     'SPEARMINT OIL' -->
+<!--   ), -->
+
+<!--   'ONLY TOTALS' = c( -->
+<!--     'BEDDING PLANT TOTALS', -->
+<!--     'BERRY TOTALS', -->
+<!--     'CITRUS TOTALS', -->
+<!--     'CROP TOTALS', -->
+<!--     'FIELD CROP & VEGETABLE TOTALS', -->
+<!--     'FIELD CROP TOTALS', -->
+<!--     'FLORICULTURE TOTALS', -->
+<!--     'FOOD CROP TOTALS', -->
+<!--     'FRUIT & TREE NUT TOTALS', -->
+<!--     'FRUIT TOTALS', -->
+<!--     'GRASSES & LEGUMES TOTALS', -->
+<!--     'HORTICULTURE TOTALS', -->
+<!--     'NON-CITRUS FRUIT & TREE NUTS TOTALS', -->
+<!--     'NON-CITRUS TOTALS', -->
+<!--     'NURSERY TOTALS', -->
+<!--     'TREE NUT TOTALS', -->
+<!--     'VEGETABLE TOTALS' -->
+<!--   ) -->
+
+
+<!-- ) -->
+
+<!-- # Create a vector for mapping based on the list of commodities/groups -->
+<!-- mappingVector = Reduce(function(a,f){ -->
+<!--   for(ff in mapping[[f]]){ -->
+<!--     a[ff] = f -->
+<!--   } -->
+<!--   return(a) -->
+<!-- },names(mapping),c()) -->
+
+
+<!-- ss1$COMMODITY_GROUP = mappingVector[ss1$COMMODITY_DESC] -->
+
+
+
+<!-- #Suggestions: Need to identify  -->
+<!-- # a) newly created names; -->
+<!-- # b) Existing Column names -->
+<!-- # c) Existing row names within each column -->
+
+
+<!-- #COUNTY DATA -->
+<!-- variableDefinitions = list( -->
+<!--   'AREA HARVERSTED' = list( -->
+<!--     NAME = 'HARVESTED', -->
+<!--     STATISTICCAT = 'AREA HARVESTED', -->
+<!--     UNIT_NAME = 'HA_UNITS', -->
+<!--     UNIT = unique(ss1$UNIT_DESC), -->
+<!--     FREQ = unique(ss1$FREQ_DESC), -->
+<!--     REFERENCE = 'YEAR' -->
+
+<!--   ), -->
+<!--   'AREA PLANTED' = list( -->
+<!--     NAME = 'PLANTED', -->
+<!--     STATISTICCAT = 'AREA PLANTED', -->
+<!--     UNIT_NAME = 'PA_UNITS', -->
+<!--     UNIT = unique(ss1$UNIT_DESC), -->
+<!--     FREQ = unique(ss1$FREQ_DESC), -->
+<!--     REFERENCE = 'YEAR' -->
+<!--   ), -->
+<!--   'YIELD' = list( -->
+<!--     NAME = 'YIELD', -->
+<!--     STATISTICCAT = 'YIELD', -->
+<!--     UNIT_NAME = 'YLD_UNITS', -->
+<!--     UNIT = c('BARRELS / ACRE', 'BOXES / ACRE', 'BU / ACRE', -->
+<!--              'BU / PLANTED ACRE', 'CWT / ACRE', 'GALLONS / BOX', -->
+<!--              'LB / ACRE', 'LB / ACRE, CHERRY BASIS', -->
+<!--              'LB / SQ FT', 'TONS / ACRE', 'TONS / ACRE, DRY BASIS', -->
+<!--              'TONS / ACRE, FRESH BASIS', 'TONS / ACRE, IN SHELL BASIS'), -->
+<!--     FREQ = unique(ss1$FREQ_DESC), -->
+<!--     REFERENCE = 'YEAR' -->
+
+<!--   ), -->
+<!--   'PRODUCTION' = list( -->
+<!--     NAME = 'PRODUCTION', -->
+<!--     STATISTICCAT = 'PRODUCTION', -->
+<!--     UNIT_NAME = 'PROD_UNITS', -->
+<!--     UNIT = setdiff(unique(ss1$UNIT_DESC),c('$', -->
+<!--                                             '$ / TON', -->
+<!--                                             '$, CHERRY BASIS', -->
+<!--                                             '$, ON TREE EQUIV', -->
+<!--                                             '$, PHD EQUIV')), -->
+<!--     FREQ = unique(ss1$FREQ_DESC), -->
+<!--     REFERENCE = 'YEAR' -->
+
+<!--   ) -->
+
+<!-- ) -->
+
+<!-- columnsToKeep = c('COMMODITY_GROUP','SOURCE_DESC', -->
+<!--         'SECTOR_DESC','GROUP_DESC','COMMODITY_DESC','CLASS_DESC', -->
+<!--         'PRODN_PRACTICE_DESC','UTIL_PRACTICE_DESC','AGG_LEVEL_DESC', -->
+<!--         'STATE_ANSI','STATE_NAME','ASD_CODE','ASD_DESC','COUNTY_ANSI', -->
+<!--         'COUNTY_NAME','YEAR','FREQ_DESC') -->
+
+<!-- e=environment() -->
+
+<!-- for(vv in variableDefinitions){ -->
+<!--   e[[vv$NAME]] =   ss1[ss1$STATISTICCAT_DESC %in% c(vv$STATISTICCAT) &  -->
+<!--                          ss1$UNIT_DESC %in% c(vv$UNIT) & -->
+<!--                          ss1$FREQ_DESC %in% c(vv$FREQ) & -->
+<!--                          ss1$REFERENCE_PERIOD_DESC %in% c(vv$REFERENCE), ] -->
+<!--   e[[vv$NAME]][[vv$NAME]] = e[[vv$NAME]][['VALUE_num']] -->
+<!--   e[[vv$NAME]][[vv$UNIT_NAME]] = e[[vv$NAME]]$UNIT_DESC -->
+<!--   e[[vv$NAME]] = e[[vv$NAME]][,c(columnsToKeep,vv$NAME, -->
+<!--                                  vv$UNIT_NAME)] -->
+<!-- } -->
+
+<!-- countyTables = unlist(Map(function(f)f$NAME, variableDefinitions)) -->
+
+
+<!-- countyData = Reduce(function(a, f) { -->
+<!--   return(merge(a, f, by = columnsToKeep, all = TRUE)) -->
+<!-- }, Map(function(f) -->
+<!--   e[[f]], countyTables[2:length(countyTables)]), e[[countyTables[1]]]) -->
+
+<!-- countyData=countyData[countyData$COMMODITY_DESC=='CORN',] -->
+
+<!-- countyData = countyData[!is.na(countyData$COUNTY_ANSI),] -->
+<!-- countyData$FIPS = countyData$STATE_ANSI *1000 + countyData$COUNTY_ANSI -->
+
+<!-- rm(e) -->
+<!-- rm(ss) -->
+<!-- rm(ss1) -->
+<!-- rm(HARVESTED) -->
+<!-- rm(YIELD) -->
+<!-- rm(PLANTED) -->
+<!-- rm(PRODUCTION) -->
+
+
+
+<!-- # #STATE DATA -->
+<!-- # ################################################################ -->
+<!-- # variableDefinitions_ST = list( -->
+<!-- #   'REVENUE' = list( -->
+<!-- #     NAME = 'REVENUE', -->
+<!-- #     STATISTICCAT = 'PRODUCTION', -->
+<!-- #     UNIT_NAME = 'PROD_UNITS', -->
+<!-- #     UNIT = c('$', '$, CHERRY BASIS',  -->
+<!-- #              '$, ON TREE EQUIV', '$, PHD EQUIV'), -->
+<!-- #     FREQ = 'ANNUAL', -->
+<!-- #     REFERENCE = 'YEAR' -->
+<!-- #      -->
+<!-- #   ), -->
+<!-- #   'MARKETING YEAR PRICES' = list( -->
+<!-- #     NAME = 'MARKETING YEAR', -->
+<!-- #     STATISTICCAT = 'PRICE RECEIVED', -->
+<!-- #     UNIT_NAME = 'MYP_UNITS', -->
+<!-- #     UNIT = c("$ / BOX, ON TREE EQUIV", "$ / BOX, PHD EQUIV", "$ / LB", "$ / GALLON",  -->
+<!-- #              "$ / BARREL", "CENTS / LB", "$ / BOX", "$ / CWT", "$ / BU", "$ / TON",  -->
+<!-- #              "$ / TON, DRY BASIS", "$ / CONTAINER", "$ / BOX, FOB", "$ / LB, CHERRY BASIS",  -->
+<!-- #              "$ / LB, GREEN BASIS", "$ / TON, FRESH BASIS"), -->
+<!-- #     FREQ = 'ANNUAL', -->
+<!-- #     REFERENCE = 'MARKETING YEAR' -->
+<!-- #      -->
+<!-- #   ), -->
+<!-- #   'CALENDAR YEAR PRICES' = list( -->
+<!-- #     NAME = 'CALENDAR YEAR', -->
+<!-- #     STATISTICCAT = 'PRICE RECEIVED', -->
+<!-- #     UNIT_NAME = 'CYP_UNITS', -->
+<!-- #     UNIT = c("$ / LB", "$ / CWT", "$ / BU", "$ / TON", "$ / CONTAINER",  -->
+<!-- #              "$ / POT", "$ / FLAT", "$ / BUNCH", "CENTS / SPIKE", "CENTS / STEM",  -->
+<!-- #              "CENTS / BLOOM", "$ / BASKET", "$ / LB, CHERRY BASIS", "$ / LB, GREEN BASIS" -->
+<!-- #     ), -->
+<!-- #     FREQ = 'ANNUAL', -->
+<!-- #     REFERENCE = 'YEAR' -->
+<!-- #      -->
+<!-- #   ) -->
+<!-- #  -->
+<!-- # ) -->
+<!-- #  -->
+<!-- # columnsToKeep_ST = c('COMMODITY_GROUP','SOURCE_DESC', -->
+<!-- #                   'SECTOR_DESC','GROUP_DESC','COMMODITY_DESC','CLASS_DESC', -->
+<!-- #                   'PRODN_PRACTICE_DESC','UTIL_PRACTICE_DESC','AGG_LEVEL_DESC', -->
+<!-- #                   'STATE_ANSI','STATE_NAME','YEAR','FREQ_DESC') -->
+<!-- #  -->
+<!-- # e=environment() -->
+<!-- #  -->
+<!-- # for(vv in variableDefinitions_ST){ -->
+<!-- #   e[[vv$NAME]] =   ss1[ss1$STATISTICCAT_DESC %in% c(vv$STATISTICCAT) &  -->
+<!-- #                          ss1$UNIT_DESC %in% c(vv$UNIT) & -->
+<!-- #                          ss1$FREQ_DESC %in% c(vv$FREQ) & -->
+<!-- #                          ss1$REFERENCE_PERIOD_DESC %in% c(vv$REFERENCE), ] -->
+<!-- #   e[[vv$NAME]][[vv$NAME]] = e[[vv$NAME]][['VALUE_num']] -->
+<!-- #   e[[vv$NAME]][[vv$UNIT_NAME]] = e[[vv$NAME]]$UNIT_DESC -->
+<!-- #   e[[vv$NAME]] = e[[vv$NAME]][,c(columnsToKeep_ST,vv$NAME, -->
+<!-- #                                  vv$UNIT_NAME)] -->
+<!-- # } -->
+<!-- #  -->
+<!-- # stateTables = unlist(Map(function(f)f$NAME, variableDefinitions_ST)) -->
+<!-- #  -->
+<!-- #  -->
+<!-- # stateData = Reduce(function(a, f) { -->
+<!-- #   return(merge(a, f, by = columnsToKeep_ST, all = TRUE)) -->
+<!-- # }, Map(function(f) -->
+<!-- #   e[[f]], stateTables[2:length(stateTables)]), e[[stateTables[1]]]) -->
+<!-- # ################################################################ -->
+<!-- # stateDatacorn <- subset(stateData,  -->
+<!-- #                           stateData$COMMODITY_DESC=='CORN' & -->
+<!-- #                             stateData$AGG_LEVEL_DESC=='NATIONAL') -->
+<!-- #  -->
+<!-- #  -->
+<!-- #  -->
+<!-- #  -->
+<!-- #  -->
+<!-- # #STATE DATA - MONTHLY -->
+<!-- # ################################################################ -->
+<!-- # variableDefinitions_ST_m = list( -->
+<!-- #   'MONTHLY PRICES' = list( -->
+<!-- #     NAME = 'MONTHLY PRICES', -->
+<!-- #     STATISTICCAT = 'PRICE RECEIVED', -->
+<!-- #     UNIT_NAME = 'MP_UNITS', -->
+<!-- #     UNIT = c("$ / BOX, ON TREE EQUIV", "$ / BOX, PHD EQUIV", "$ / LB", "$ / GALLON",  -->
+<!-- #              "$ / BARREL", "CENTS / LB", "$ / BOX", "$ / CWT", "$ / BU", "$ / TON",  -->
+<!-- #              "$ / TON, DRY BASIS", "$ / CONTAINER", "$ / BOX, FOB", "$ / LB, CHERRY BASIS",  -->
+<!-- #              "$ / LB, GREEN BASIS", "$ / TON, FRESH BASIS"), -->
+<!-- #     FREQ = 'MONTHLY', -->
+<!-- #     REFERENCE = c('JAN','FEB','MAR','APR','MAY','JUN', -->
+<!-- #                   'JUL','AUG','SEP','OCT','NOV','DEC') -->
+<!-- #   ) -->
+<!-- # ) -->
+<!-- #  -->
+<!-- # columnsToKeep_ST_m = c('COMMODITY_GROUP','SOURCE_DESC', -->
+<!-- #                        'SECTOR_DESC','GROUP_DESC','COMMODITY_DESC','CLASS_DESC', -->
+<!-- #                        'PRODN_PRACTICE_DESC','UTIL_PRACTICE_DESC','AGG_LEVEL_DESC', -->
+<!-- #                        'STATE_ANSI','STATE_NAME','YEAR','FREQ_DESC') -->
+<!-- #  -->
+<!-- # `MONTHLY PRICES AGG` = aggregate(`MONTHLY PRICES`~., `MONTHLY PRICES`, mean) -->
+<!-- #  -->
+<!-- # stateDataM = merge(stateData, `MONTHLY PRICES AGG`, all.x=TRUE, by.x = c('MYP_UNITS', setdiff(columnsToKeep_ST,'FREQ_DESC')),by.y = c('MP_UNITS', setdiff(columnsToKeep_ST,'FREQ_DESC'))) -->
+<!-- #  -->
+<!-- # e=environment() -->
+<!-- #  -->
+<!-- # for(vv in variableDefinitions_ST_m){ -->
+<!-- #   e[[vv$NAME]] =   ss1[ss1$STATISTICCAT_DESC %in% c(vv$STATISTICCAT) &  -->
+<!-- #                          ss1$UNIT_DESC %in% c(vv$UNIT) & -->
+<!-- #                          ss1$FREQ_DESC %in% c(vv$FREQ) & -->
+<!-- #                          ss1$REFERENCE_PERIOD_DESC %in% c(vv$REFERENCE), ] -->
+<!-- #   e[[vv$NAME]][[vv$NAME]] = e[[vv$NAME]][['VALUE_num']] -->
+<!-- #   e[[vv$NAME]][[vv$UNIT_NAME]] = e[[vv$NAME]]$UNIT_DESC -->
+<!-- #   e[[vv$NAME]] = e[[vv$NAME]][,c(columnsToKeep_ST,vv$NAME, -->
+<!-- #                                  vv$UNIT_NAME)] -->
+<!-- # } -->
+<!-- #  -->
+<!-- # stateTables_m = unlist(Map(function(f)f$NAME, variableDefinitions_ST_m)) -->
+<!-- #  -->
+<!-- #  -->
+<!-- # stateData_m = Reduce(function(a, f) { -->
+<!-- #   return(merge(a, f, by = columnsToKeep_ST_m, all = TRUE)) -->
+<!-- # }, Map(function(f) -->
+<!-- #   e[[f]], stateTables_m[2:length(stateTables_m)]), e[[stateTables_m[1]]]) -->
+<!-- # ################################################################ -->
+<!-- #  -->
+<!-- #  -->
+<!-- #  -->
+
+<!-- ``` -->
+
+<!-- ### Detrending crops data -->
+
+<!-- We detrend the observed yields ($y_t$) by fitting a cubic polynomial of time (years) and calculating relative yield ($\hat{y}_{t}$) as observed yield relative to the predicted ($\bar{y}_t$). The estimated functional form for yields is $\bar{y}_t = \alpha_1 + \alpha_2 t + \alpha3 t^2 + \alpha_4 t^3 + \epsilon_t$. The relative yield is calculated as $\hat{y}_t= \frac{y_{t}}{\hat{y}_t}$. -->
+
+
+<!-- ```{r detrend-yield-data, caceh = cache, echo = FALSE, include = FALSE} -->
+
+<!-- for(thisCommodity in unique(countyData$COMMODITY_DESC)){ -->
+<!--   for(thisFIPS in unique(countyData$FIPS)){ -->
+<!--     toInclude = countyData$COMMODITY_DESC==thisCommodity & countyData$FIPS==thisFIPS & !is.na(countyData$YIELD) -->
+
+<!--     if(sum(toInclude)>20){ -->
+<!--     trendModel = lm(YIELD~YEAR + I(YEAR^2) + I(YEAR^3), countyData[toInclude,]) -->
+
+<!--     countyData[toInclude,'YIELD_trend'] = predict(trendModel, countyData[toInclude,]) -->
+<!--     countyData[toInclude,'YIELD_relative'] = countyData[toInclude,]$YIELD / predict(trendModel, countyData[toInclude,]) -->
+<!--     countyData[toInclude,'YIELD_max'] = max(countyData[toInclude,]$YIELD) + countyData[toInclude,]$YIELD - predict(trendModel, countyData[toInclude,]) -->
+
+<!--     } -->
+
+<!--   } -->
+<!-- } -->
+<!-- ``` -->
+
+
+<!-- ```{r fig.cap = 'An example of detrending corn in county number 17113', echo = FALSE, fig.show="hold", out.width="50%"} -->
+
+<!-- toInclude = countyData$COMMODITY_DESC=='CORN' & countyData$FIPS==17113  -->
+
+<!-- plot(countyData[toInclude,]$YEAR,countyData[toInclude,]$YIELD, pch=16, col='blue', main='trend', xlab='Year', ylab='Yield') -->
+<!-- lines(countyData[toInclude,]$YEAR,countyData[toInclude,]$YIELD_trend, col='red', lwd=2) -->
+
+
+<!-- plot(countyData[toInclude,]$YEAR,countyData[toInclude,]$YIELD_relative, pch=16, col='blue', main='relative yield', xlab='Year',ylab='Relative yield') -->
+
+<!-- ``` -->
+
+
+
+<!-- ## Climate data -->
+
+
+
+<!-- ```{r prepare-weather-data, cache = cache, echo = FALSE, include = FALSE} -->
+
+<!-- precipitation = read.csv('ftp://ftp.ncdc.noaa.gov/pub/data/cirs/climdiv/climdiv-pcpncy-v1.0.0-20211206',sep='\t', header = FALSE) -->
+<!-- temperature = read.csv('ftp://ftp.ncdc.noaa.gov/pub/data/cirs/climdiv/climdiv-tmpccy-v1.0.0-20211206',sep='\t', header = FALSE) -->
+
+
+<!-- mapState = c( -->
+<!--   `01`='01', -->
+<!-- `02`='04', -->
+<!-- `03`='05', -->
+<!-- `04`='06', -->
+<!-- `05`='08', -->
+<!-- `06`='09', -->
+<!-- `07`='10', -->
+<!-- `08`='12', -->
+<!-- `09`='13', -->
+<!-- `10`='16', -->
+<!-- `11`='17', -->
+<!-- `12`='18', -->
+<!-- `13`='19', -->
+<!-- `14`='20', -->
+<!-- `15`='21', -->
+<!-- `16`='22', -->
+<!-- `17`='23', -->
+<!-- `18`='24', -->
+<!-- `19`='25', -->
+<!-- `20`='26', -->
+<!-- `21`='27', -->
+<!-- `22`='28', -->
+<!-- `23`='29', -->
+<!-- `24`='30', -->
+<!-- `25`='31', -->
+<!-- `26`='32', -->
+<!-- `27`='33', -->
+<!-- `28`='34', -->
+<!-- `29`='35', -->
+<!-- `30`='36', -->
+<!-- `31`='37', -->
+<!-- `32`='38', -->
+<!-- `33`='39', -->
+<!-- `34`='40', -->
+<!-- `35`='41', -->
+<!-- `36`='42', -->
+<!-- `37`='44', -->
+<!-- `38`='45', -->
+<!-- `39`='46', -->
+<!-- `40`='47', -->
+<!-- `41`='48', -->
+<!-- `42`='49', -->
+<!-- `43`='50', -->
+<!-- `44`='51', -->
+<!-- `45`='53', -->
+<!-- `46`='54', -->
+<!-- `47`='55', -->
+<!-- `48`='56' -->
+<!-- ) -->
+
+<!-- precipitationFormatted = within(precipitation,{ -->
+<!--   FIPS = as.numeric(paste0(mapState[substr(V1,1,2)], substr(V1,3,5))) -->
+<!--   element = substr(V1,6,7) -->
+<!--   year = as.numeric(substr(V1,8,11)) -->
+<!--   `01` =  as.numeric(substr(V1,12,18)) -->
+<!--   `02` =  as.numeric(substr(V1,19,25)) -->
+<!--   `03` =  as.numeric(substr(V1,26,32)) -->
+<!--   `04` =  as.numeric(substr(V1,33,39)) -->
+<!--   `05` =  as.numeric(substr(V1,40,46)) -->
+<!--   `06` =  as.numeric(substr(V1,47,53)) -->
+<!--   `07` =  as.numeric(substr(V1,54,60)) -->
+<!--   `08` =  as.numeric(substr(V1,61,67)) -->
+<!--   `09` =  as.numeric(substr(V1,68,74)) -->
+<!--   `10` =  as.numeric(substr(V1,75,81)) -->
+<!--   `11` =  as.numeric(substr(V1,82,88)) -->
+<!--   `12` =  as.numeric(substr(V1,89,95)) -->
+<!--   V1=NULL -->
+<!-- }) -->
+
+<!-- temperatureFormatted = within(temperature,{ -->
+<!--   FIPS = as.numeric(paste0(mapState[substr(V1,1,2)], substr(V1,3,5))) -->
+<!--   element = substr(V1,6,7) -->
+<!--   year = as.numeric(substr(V1,8,11)) -->
+<!--   `01` =  as.numeric(substr(V1,12,18)) -->
+<!--   `02` =  as.numeric(substr(V1,19,25)) -->
+<!--   `03` =  as.numeric(substr(V1,26,32)) -->
+<!--   `04` =  as.numeric(substr(V1,33,39)) -->
+<!--   `05` =  as.numeric(substr(V1,40,46)) -->
+<!--   `06` =  as.numeric(substr(V1,47,53)) -->
+<!--   `07` =  as.numeric(substr(V1,54,60)) -->
+<!--   `08` =  as.numeric(substr(V1,61,67)) -->
+<!--   `09` =  as.numeric(substr(V1,68,74)) -->
+<!--   `10` =  as.numeric(substr(V1,75,81)) -->
+<!--   `11` =  as.numeric(substr(V1,82,88)) -->
+<!--   `12` =  as.numeric(substr(V1,89,95)) -->
+<!--   V1=NULL -->
+<!-- }) -->
+
+
+<!-- precipitationMonthly =  reshape2::melt(precipitationFormatted, id.vars = c('year','element','FIPS')) -->
+<!-- temperatureMonthly =  reshape2::melt(temperatureFormatted, id.vars = c('year','element','FIPS')) -->
+
+
+<!-- precipitationMonthly$date = as.Date(sprintf('%s-%s-01', precipitationMonthly$year, precipitationMonthly$variable)) -->
+<!-- temperatureMonthly$date = as.Date(sprintf('%s-%s-01', temperatureMonthly$year, temperatureMonthly$variable)) -->
+
+<!-- precipitationMonthly = precipitationMonthly[complete.cases(precipitationMonthly) & precipitationMonthly$value>0,] -->
+<!-- temperatureMonthly = temperatureMonthly[complete.cases(temperatureMonthly) & temperatureMonthly$value>0,] -->
+
+<!-- ``` -->
+
+<!-- ```{r prepare-weather-moments-data, cache = cache, echo = FALSE, include = FALSE} -->
+
+
+<!-- precipitationAnnual =  aggregate(value~FIPS+year, precipitationMonthly, mean) -->
+<!-- temperatureAnnual =  aggregate(value~FIPS+year, temperatureMonthly, mean) -->
+
+
+<!-- fipsYears = merge(precipitationAnnual,temperatureAnnual, by=c('FIPS','year'), suffixes=c('prec','temp')) -->
+
+<!-- cl = parallel::makeCluster(parallel::detectCores()) -->
+
+<!-- parallel::clusterExport(cl,c('fipsYears')) -->
+
+<!-- tictoc::tic() -->
+
+<!-- parResults = parallel::parLapply(cl,1:NROW(fipsYears), function(nn){ -->
+<!--   curRow = fipsYears[nn,] -->
+
+<!--   relData = fipsYears[fipsYears$FIPS==curRow$FIPS & fipsYears$year %in% (curRow$year-29):curRow$year,] -->
+
+<!--   if(NROW(relData)==30){ -->
+<!--   tempMoments = moments::all.moments(relData$valuetemp, order.max = 4, central = TRUE) -->
+<!--   precMoments = moments::all.moments(relData$valueprec, order.max = 4, central = TRUE) -->
+
+<!--   curRow[1,c('meantemp','varitemp','skewtemp','kurttemp')] = c(mean(relData$valuetemp),tempMoments[3:5]) -->
+<!--   curRow[1,c('meanprec','variprec','skewprec','kurtprec')] = c(mean(relData$valueprec),precMoments[3:5]) -->
+
+<!--   } else { -->
+<!--       curRow[1,c('meantemp','varitemp','skewtemp','kurttemp')] = c(NA,NA,NA,NA) -->
+<!--       curRow[1,c('meanprec','variprec','skewprec','kurtprec')] = c(NA,NA,NA,NA) -->
+
+<!--   } -->
+<!--   return(curRow) -->
+
+<!-- }) -->
+<!-- tictoc::toc() -->
+
+<!-- completeClimateData=  do.call(rbind, Map(function(f) f[complete.cases(f),], parResults)) -->
+
+
+<!-- parallel::stopCluster(cl) -->
+
+<!-- ``` -->
+
+
+<!-- ```{r climate-county-data, echo = FALSE, include = FALSE, cache = cache} -->
+
+<!-- climateCountyData = merge(countyData, completeClimateData, by.x=c('FIPS','YEAR'), by.y = c('FIPS','year')) -->
+
+<!-- ``` -->
+
+
+<!-- To establish the efficiency of the use of climate inputs to generate yield, we first establish the contribution of climate variables to yields. We do this by estimating the relationship between climate variables, technology (approximated by time) and yield, including a state-level fixed effect. We also assume, following the approach of stochastic frontier analysis, that the error term in this estimation is composed of a normally distributed noise ($v_t$) and a positively distributed inefficiency ($u_t$) which  is due to the climate variables not being used efficiently. -->
+
+<!-- $$y_t = \alpha'c+\beta t  + I_{state} + v_t-u_t$$ -->
+
+<!-- ```{r sfa-results, echo = FALSE, cache = cache, include = FALSE} -->
+<!-- sfaResults = frontier::sfa(YIELD~valuetemp+valueprec+meantemp+meanprec+varitemp+variprec+skewtemp+skewprec+kurttemp+kurtprec+YEAR+STATE_NAME,data = climateCountyData[,]) -->
+<!-- ``` -->
+
+
+
+<!-- ```{r climate-county-data-sfa, include=FALSE, echo = FALSE, cache = TRUE} -->
+
+<!-- climateCountyDataSFA = climateCountyData[sfaResults$validObs,] -->
+
+
+
+<!-- climateCountyDataSFA$YIELD_SFA_FITTED = sfaResults$fitted -->
+
+<!-- climateCountyDataSFA$YIELD_SFA_FITTED_INEF = sfaResults$fitted + log(frontier::efficiencies(sfaResults)) -->
+
+<!-- climateCountyDataSFA$YIELD_EFF_SHARE = (sfaResults$fitted + log(frontier::efficiencies(sfaResults)))/sfaResults$fitted -->
+
+
+<!-- climateCountyDataSFA$YIELD_SFA_FITTED_INEF_2021 = climateCountyDataSFA$YIELD_SFA_FITTED_INEF + (2021-climateCountyDataSFA$YEAR) * sfaResults$olsParam['YEAR'] -->
+
+<!-- climateCountyDataSFA$YIELD_SFA_FITTED_INEF_2021_2 = (climateCountyDataSFA$YIELD_SFA_FITTED + (2021-climateCountyDataSFA$YEAR) * sfaResults$olsParam['YEAR']) * climateCountyDataSFA$YIELD_EFF_SHARE -->
+
+
+<!-- ``` -->
+
+<!-- ```{r fig.cap='Observed, predicted, and imperfectly efficient yields for county 17133', echo = FALSE} -->
+
+<!-- toInclude = climateCountyDataSFA$FIPS == 17133 -->
+
+<!-- plot(climateCountyDataSFA[toInclude,'YEAR'],climateCountyDataSFA[toInclude,'YIELD'],pch=16, col='red', ylim = c(10,250), xlab='Year', ylab='Yield') -->
+<!-- points(climateCountyDataSFA[toInclude,'YEAR'],climateCountyDataSFA[toInclude,'YIELD_SFA_FITTED'],pch=16, col='blue') -->
+<!-- points(climateCountyDataSFA[toInclude,'YEAR'],climateCountyDataSFA[toInclude,'YIELD_SFA_FITTED_INEF'],pch=16, col='green') -->
+<!-- points(climateCountyDataSFA[toInclude,'YEAR'],climateCountyDataSFA[toInclude,'YIELD_SFA_FITTED_INEF_2021'],pch=16, col='orange') -->
+
+<!-- ``` -->
+
+<!-- With the estimates of yields that can be attributed to climate variables and the estimated inefficiencies, we now perform a DEA analysis to estimate the climate efficiency with the shadow prices (impacts of variables on yield). -->
+
+
+
+<!-- <!-- ```{r fig.cap='Optimal yields, observed yields for county 17133', echo = FALSE} --> -->
+
+<!-- <!-- toInclude = climateCountyData$FIPS == 17133 & climateCountyData$COMMODITY_DESC=='CORN' --> -->
+
+<!-- <!-- crs = Benchmarking::dea.dual(X=climateCountyData[toInclude,]$YIELD_relative, Y=thisCountyClimate[,28:37],RTS='crs') --> -->
+
+<!-- <!-- plot(climateCountyData[toInclude,]$YEAR,climateCountyData[toInclude,]$YIELD, pch = 16, col ='blue', ylim=c(0,400)) --> -->
+<!-- <!-- points(climateCountyData[toInclude,]$YEAR,climateCountyData[toInclude,]$YIELD * 1/crs$eff, pch = 16, col ='red') --> -->
+
+
+<!-- <!-- ``` --> -->
+
+
+
+<!-- <!-- ```{r echo = FALSE, fig.cap='Counties covered by climate data'} --> -->
+
+<!-- <!-- countiesOnMap = maps::map('county',plot=FALSE) --> -->
+
+<!-- <!-- countiesWithPreciptiation = maps::county.fips[maps::county.fips$fips %in% unique(precipitationMonthly$FIPS),] --> -->
+
+<!-- <!-- countiesOnMap$col = ifelse(countiesOnMap$names %in% countiesWithPreciptiation$polyname,'blue','white') --> -->
+
+<!-- <!-- maps::map('county',plot=TRUE, col = countiesOnMap$col, fill = TRUE) --> -->
+
+
+<!-- <!-- ``` --> -->
 
 
