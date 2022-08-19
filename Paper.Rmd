@@ -19,6 +19,7 @@ The continuous changes to climate represents another distinct cost to the societ
 
 # Data
 
+<<<<<<< HEAD
 
 <!-- ## Crops data -->
 
@@ -629,6 +630,694 @@ The continuous changes to climate represents another distinct cost to the societ
 <!-- `47`='55', -->
 <!-- `48`='56' -->
 <!-- ) -->
+=======
+## Crops data
+
+We obtained the crops data from NASS QuickStats: 
+
+```{r load-data, cache=cache, echo = TRUE}
+# Specify the date-dependent component of the data file name
+yrdd='20220428'
+
+# Download the file
+download.file(
+  sprintf('ftp://ftp.nass.usda.gov/quickstats/qs.crops_%s.txt.gz',yrdd),
+  sprintf('qs.crops_%s.txt.gz',yrdd), 
+  mode='wb'
+)
+
+# Read the file into an object
+ss= read.csv(sprintf('qs.crops_%s.txt.gz',yrdd), sep='\t')
+```
+
+
+In the first step we only keep the survey data for six     variables at national, state, ag. district and county level, excluding percentage point changes. We also exclude the data for "other counties" and "other states" which includes data that is protected.
+
+```{r prepare-crops-data, cache=cache, echo = TRUE}
+# Subset only needed data into object SS1
+ss1 = ss[ss$SOURCE_DESC %in% c('SURVEY') &
+           ss$STATISTICCAT_DESC %in% c('AREA HARVESTED',
+                                       'AREA PLANTED',
+                                       'PRICE RECEIVED',
+                                       'PRODUCTION',
+                                       'YIELD',
+                                       'STOCKS') &
+           ss$AGG_LEVEL_DESC %in% c('NATIONAL',
+                                    'STATE',
+                                    'AGRICULTURAL DISTRICT',
+                                    'COUNTY') &
+           ss$FREQ_DESC %in% c('ANNUAL',
+                               'MONTHLY',
+                               'POINT IN TIME') &
+           ss$REFERENCE_PERIOD_DESC %in% c('MARKETING YEAR','YEAR',
+                                           'JAN','FEB','MAR','APR','MAY','JUN',
+                                           'JUL','AUG','SEP','OCT','NOV','DEC',
+                                           'FIRST OF DEC','FIRST OF JUN',
+                                           'FIRST OF MAR','FIRST OF SEP') &
+           !ss$UNIT_DESC %in% c('OPERATIONS',
+                                'PCT',
+                                'PCT BY COLOR',
+                                'PCT BY GRADE',
+                                'PCT BY SIZE GROUP',
+                                'PCT BY TYPE',
+
+                                  'PCT OF MKTG YEAR',
+                                'PCT OF PARITY',
+                                'PCT OF PRODUCTION',
+                                'PCT OF TOTAL STOCKS') &
+           !ss$STATE_NAME %in% c('OTHER STATES') &
+           !ss$ASD_DESC %in% c('OTHER DISTRICTS, ALL COUNTIES') &
+           !ss$COUNTY_NAME %in% c("OTHER (COMBINED) COUNTIES",
+                                  'OTHER COUNTIES'), ]
+
+ss1$STATISTICCAT_DESC = ifelse(ss1$STATISTICCAT_DESC %in% c('PRODUCTION') & ss1$UNIT_DESC %in% c('$', '$ / TON', '$, CHERRY BASIS','$, ON TREE EQUIV', '$, PHD EQUIV'), 'REVENUE', ss1$STATISTICCAT_DESC)
+```
+
+
+
+```{r character-values-to-numbers, cache=cache, echo = FALSE}
+# Values contain illegal commas--only extract the numerals and turn the column into numeric
+ss1$VALUE_num <- as.numeric(gsub('[^0-9\\.]','',ss1$VALUE, perl = TRUE))
+```
+
+```{r fix-county-names, cache=cache, echo = FALSE}
+
+ss1$COUNTY_NAME = ifelse(ss1$CONTY_NAME=='ST. JOSEPH', 'ST JOSEPH', ss1$COUNTRY_NAME)
+ss1$COUNTY_NAME = ifelse(ss1$CONTY_NAME=='ST. LOUIS', 'ST LOUIS', ss1$COUNTRY_NAME)
+ss1$COUNTY_NAME = ifelse(ss1$CONTY_NAME=='ST. JOHN THE BAPTIST', 'ST JOHN THE BAPTIST', ss1$COUNTRY_NAME)
+ss1$COUNTY_NAME = ifelse(ss1$CONTY_NAME=='ST. JOHNS', 'ST JOHNS', ss1$COUNTRY_NAME)
+ss1$COUNTY_NAME = ifelse(ss1$CONTY_NAME=='ST. LUCIE', 'ST LUCIE', ss1$COUNTRY_NAME)
+ss1$COUNTY_NAME = ifelse(ss1$CONTY_NAME=='STE. GENEVIEVE', 'STE GENEVIEVE', ss1$COUNTRY_NAME)
+```
+
+```{r eliminate-totals, cache = cahce, echo = TRUE}
+
+ss1 = ss1[!ss1$COMMODITY_DESC %in% c('BEDDING PLANT TOTALS','BERRY TOTALS','CITRUS TOTALS',
+'CROP TOTALS','FIELD CROP & VEGETABLE TOTALS',
+'FIELD CROP TOTALS','FLORICULTURE TOTALS',
+'FOOD CROP TOTALS','FRUIT & TREE NUT TOTALS',
+'FRUIT TOTALS','GRASSES & LEGUMES TOTALS','HORTICULTURE TOTALS',
+'NON-CITRUS FRUIT & TREE NUTS TOTALS','NON-CITRUS TOTALS',
+'NURSERY TOTALS','TREE NUT TOTALS','VEGETABLE TOTALS'), ]
+```
+
+```{r remove-silage, cache=cache, echo = TRUE}
+# Remove all silage
+ss1=ss1[!ss1$UTIL_PRACTICE_DESC %in% c('SILAGE','FORAGE'),]
+```
+
+
+```{r correct-utilization, cache=cache, echo = TRUE}
+ss1$UTIL_PRACTICE_DESC = ifelse(ss1$COMMODITY_DESC
+                               %in% c('CORN','SORGHUM'),'GRAIN',
+                               ss$UTIL_PRACTICE_DESC)
+```
+
+
+```{r remove-silage, cache=cache, echo = TRUE}
+# Define mappings
+mapping = list(
+  'FOOD GRAINS' = c('RICE', 'RYE', 'WHEAT'),
+  'FEED CROPS' = c(
+    'BARLEY',
+    'CORN',
+    'HAY',
+    'MILLET',
+    'OATS',
+    'PROSO MILLET',
+    'SORGHUM'
+  ),
+  'FIBER' = c(
+    'COTTON',
+    'COTTON LINT',
+    'COTTON LINT, LONG STAPLE',
+    'COTTON LINT, UPLAND',
+    'COTTONSEED'
+  ),
+  TOBACCO = 'TOBACCO',
+  'OIL CROPS' = c(
+    'CAMELINA',
+    'CANOLA',
+    'FLAXSEED',
+    'MISCELLANEOUS OIL CROPS',
+    'MUSTARD',
+    'MUSTARD SEED',
+    'PEANUTS',
+    'RAPESEED',
+    'SAFFLOWER',
+    'SOYBEANS',
+    'SUNFLOWER'
+  ),
+
+  'VEGETABLES AND MELONS(DRY PULSES-BEANS)' = c (
+    'BEANS',
+    'BEANS, GREEN LIMA',
+    'BEANS, GREEN LIMA, PROCESSING',
+    'BEANS, SNAP',
+    'BEANS, SNAP, FRESH',
+    'BEANS, SNAP, PROCESSING',
+    'DRY BEANS',
+    'LEGUMES'
+  ) ,
+  'VEGETABLES AND MELONS(DRY PULSES-PEAS)' = c(
+    'CHICKPEAS',
+    'DRY PEAS',
+    'DRY PEAS, AUSTRIAN WINTER',
+    'DRY PEAS, EDIBLE',
+    'DRY PEAS, WRINKLED SEED',
+    'LENTILS',
+    'PEAS'
+  ),
+  'VEGETABLES AND MELONS(POTATOES)' = c (
+    'POTATOES',
+    'POTATOES, FALL',
+    'POTATOES, SPRING',
+    'POTATOES, SUMMER',
+    'SWEET POTATOES',
+    'TARO'
+  ),
+  'VEGETABLES AND MELONS(SPECIALTY)' = c(
+    'ARTICHOKES',
+    'ASPARAGUS',
+    'BEETS',
+    'BROCCOLI',
+    'BRUSSELS SPROUTS',
+    'CABBAGE',
+    'CABBAGE, FRESH',
+    'CANTALOUPS',
+    'CARROTS',
+    'CARROTS, FRESH',
+    'CARROTS, PROCESSING',
+    'CAULIFLOWER',
+    'CELERY',
+    'CORN, SWEET',
+    'CORN, SWEET, FRESH',
+    'CORN, SWEET, PROCESSING',
+    'CUCUMBERS',
+    'CUCUMBERS, FRESH',
+    'CUCUMBERS, PROCESSING',
+    'EGGPLANT',
+    'ESCAROLE & ENDIVE',
+    'GARLIC',
+    'GREENS',
+    'GINGER ROOT',
+    'HONEYDEWS',
+    'LETTUCE',
+    'LETTUCE, HEAD',
+    'LETTUCE, LEAF',
+    'LETTUCE, ROMAINE',
+    'MELONS',
+    'OKRA',
+    'ONIONS',
+    'ONIONS, SPRING',
+    'ONIONS, STORAGE',
+    'ONIONS, SUMMER, NONSTORAGE',
+    'PEAS, GREEN',
+    'PEAS, GREEN, PROCESSING',
+    'PEPPERS',
+    'PEPPERS, CHILE',
+    'PEPPERS, BELL',
+    'PUMPKINS',
+    'RADISHES',
+    'SPINACH',
+    'SPINACH, FRESH',
+    'SPINACH, PROCESSING',
+    'SQUASH',
+    'SWEET CORN',
+    'TOMATOES',
+    'TOMATOES, FRESH',
+    'TOMATOES, PROCESSING',
+    'WATERMELON'
+  ),
+
+  'FRUITS AND NUTS(FRUITS)' = c (
+    'APPLES',
+    'APRICOTS',
+    'AVOCADOS',
+    'BANANAS',
+    'BLACKBERRIES',
+    'BLACKBERRY GROUP',
+    'BOYSENBERRIES',
+    'BLUEBERRIES',
+    'CANEBERRIES',
+    'CHERRIES',
+    'CHERRIES, SWEET',
+    'CHERRIES, TART',
+    'COFFEE',
+    'CRANBERRIES',
+    'DATES',
+    'FIGS',
+    'GOOSEBERRIES',
+    'GRAPEFRUIT',
+    'GRAPES',
+    'GUAVAS',
+    'KIWIFRUIT',
+    'LEMONS',
+    'LIMES',
+    'LOGANBERRIES',
+    'NECTARINES',
+    'OLIVES',
+    'ORANGES',
+    'PAPAYAS',
+    'PEACHES',
+    'PEARS',
+    'PINEAPPLES',
+    'PLUMS',
+    'PLUMS AND PRUNES',
+    'PRUNES',
+    'RASPBERRIES',
+    'STRAWBERRIES',
+    'TANGELOS',
+    'TANGERINES'
+  ),
+
+  'FRUITS AND NUTS(NUTS)' = c (
+    'ALMONDS',
+    'HAZELNUTS',
+    'MACADAMIA NUTS',
+    'MACADAMIAS',
+    'PECANS',
+    'PISTACHIOS',
+    'WALNUTS'
+  ),
+  SUGARS = c (
+    'MAPLE PRODUCTS',
+    'SUGAR BEETS',
+    'SUGARBEETS',
+    'SUGARCANE',
+    'SUGARCANE FOR SUGAR AND SEED'
+  ),
+
+  'ALL OTHER CROPS' = c(
+    'FLORICULTURE',
+    'HOPS',
+    'MINT',
+    'MISCELLANEOUS CROPS',
+    'MUSHROOMS',
+    'PEPPERMINT OIL',
+    'SPEARMINT OIL'
+  ),
+
+  'ONLY TOTALS' = c(
+    'BEDDING PLANT TOTALS',
+    'BERRY TOTALS',
+    'CITRUS TOTALS',
+    'CROP TOTALS',
+    'FIELD CROP & VEGETABLE TOTALS',
+    'FIELD CROP TOTALS',
+    'FLORICULTURE TOTALS',
+    'FOOD CROP TOTALS',
+    'FRUIT & TREE NUT TOTALS',
+    'FRUIT TOTALS',
+    'GRASSES & LEGUMES TOTALS',
+    'HORTICULTURE TOTALS',
+    'NON-CITRUS FRUIT & TREE NUTS TOTALS',
+    'NON-CITRUS TOTALS',
+    'NURSERY TOTALS',
+    'TREE NUT TOTALS',
+    'VEGETABLE TOTALS'
+  )
+
+
+)
+
+# Create a vector for mapping based on the list of commodities/groups
+mappingVector = Reduce(function(a,f){
+  for(ff in mapping[[f]]){
+    a[ff] = f
+  }
+  return(a)
+},names(mapping),c())
+
+
+ss1$COMMODITY_GROUP = mappingVector[ss1$COMMODITY_DESC]
+```
+
+
+```{r extract-non-price-data, cache=cache, echo = TRUE}
+
+#Suggestions: Need to identify
+# a) newly created names;
+# b) Existing Column names
+# c) Existing row names within each column
+
+#COUNTY DATA
+variableDefinitions = list(
+  'AREA HARVERSTED' = list(
+    NAME = 'HARVESTED',
+    STATISTICCAT = 'AREA HARVESTED',
+    UNIT_NAME = 'HA_UNITS',
+    UNIT = unique(ss1$UNIT_DESC),
+    FREQ = unique(ss1$FREQ_DESC),
+    REFERENCE = 'YEAR'
+
+  ),
+  'AREA PLANTED' = list(
+    NAME = 'PLANTED',
+    STATISTICCAT = 'AREA PLANTED',
+    UNIT_NAME = 'PA_UNITS',
+    UNIT = unique(ss1$UNIT_DESC),
+    FREQ = unique(ss1$FREQ_DESC),
+    REFERENCE = 'YEAR'
+  ),
+  'YIELD' = list(
+    NAME = 'YIELD',
+    STATISTICCAT = 'YIELD',
+    UNIT_NAME = 'YLD_UNITS',
+    UNIT = c('BARRELS / ACRE', 'BOXES / ACRE', 'BU / ACRE',
+             'BU / PLANTED ACRE', 'CWT / ACRE', 'GALLONS / BOX',
+             'LB / ACRE', 'LB / ACRE, CHERRY BASIS',
+             'LB / SQ FT', 'TONS / ACRE', 'TONS / ACRE, DRY BASIS',
+             'TONS / ACRE, FRESH BASIS', 'TONS / ACRE, IN SHELL BASIS'),
+    FREQ = unique(ss1$FREQ_DESC),
+    REFERENCE = 'YEAR'
+
+  ),
+  'PRODUCTION' = list(
+    NAME = 'PRODUCTION',
+    STATISTICCAT = 'PRODUCTION',
+    UNIT_NAME = 'PROD_UNITS',
+    UNIT = setdiff(unique(ss1$UNIT_DESC),c('$',
+                                            '$ / TON',
+                                            '$, CHERRY BASIS',
+                                            '$, ON TREE EQUIV',
+                                            '$, PHD EQUIV')),
+    FREQ = unique(ss1$FREQ_DESC),
+    REFERENCE = 'YEAR'
+
+  )
+
+)
+
+columnsToKeep = c('COMMODITY_GROUP','SOURCE_DESC',
+        'SECTOR_DESC','GROUP_DESC','COMMODITY_DESC','CLASS_DESC',
+        'PRODN_PRACTICE_DESC','UTIL_PRACTICE_DESC','AGG_LEVEL_DESC',
+        'STATE_ANSI','STATE_NAME','ASD_CODE','ASD_DESC','COUNTY_ANSI',
+        'COUNTY_NAME','YEAR','FREQ_DESC')
+
+e=environment()
+
+for(vv in variableDefinitions){
+  e[[vv$NAME]] =   ss1[ss1$STATISTICCAT_DESC %in% c(vv$STATISTICCAT) &
+                         ss1$UNIT_DESC %in% c(vv$UNIT) &
+                         ss1$FREQ_DESC %in% c(vv$FREQ) &
+                         ss1$REFERENCE_PERIOD_DESC %in% c(vv$REFERENCE), ]
+  e[[vv$NAME]][[vv$NAME]] = e[[vv$NAME]][['VALUE_num']]
+  e[[vv$NAME]][[vv$UNIT_NAME]] = e[[vv$NAME]]$UNIT_DESC
+  e[[vv$NAME]] = e[[vv$NAME]][,c(columnsToKeep,vv$NAME,
+                                 vv$UNIT_NAME)]
+}
+
+countyTables = unlist(Map(function(f)f$NAME, variableDefinitions))
+
+
+countyData = Reduce(function(a, f) {
+  return(merge(a, f, by = columnsToKeep, all = TRUE))
+}, Map(function(f)
+  e[[f]], countyTables[2:length(countyTables)]), e[[countyTables[1]]])
+
+#countyData=countyData[countyData$COMMODITY_DESC=='CORN',]
+
+
+rm(e)
+rm(ss)
+rm(ss1)
+rm(HARVESTED)
+rm(YIELD)
+rm(PLANTED)
+rm(PRODUCTION)
+
+
+
+# #STATE DATA
+# ################################################################
+# variableDefinitions_ST = list(
+#   'REVENUE' = list(
+#     NAME = 'REVENUE',
+#     STATISTICCAT = 'PRODUCTION',
+#     UNIT_NAME = 'PROD_UNITS',
+#     UNIT = c('$', '$, CHERRY BASIS',
+#              '$, ON TREE EQUIV', '$, PHD EQUIV'),
+#     FREQ = 'ANNUAL',
+#     REFERENCE = 'YEAR'
+#
+#   ),
+#   'MARKETING YEAR PRICES' = list(
+#     NAME = 'MARKETING YEAR',
+#     STATISTICCAT = 'PRICE RECEIVED',
+#     UNIT_NAME = 'MYP_UNITS',
+#     UNIT = c("$ / BOX, ON TREE EQUIV", "$ / BOX, PHD EQUIV", "$ / LB", "$ / GALLON",
+#              "$ / BARREL", "CENTS / LB", "$ / BOX", "$ / CWT", "$ / BU", "$ / TON",
+#              "$ / TON, DRY BASIS", "$ / CONTAINER", "$ / BOX, FOB", "$ / LB, CHERRY BASIS",
+#              "$ / LB, GREEN BASIS", "$ / TON, FRESH BASIS"),
+#     FREQ = 'ANNUAL',
+#     REFERENCE = 'MARKETING YEAR'
+#
+#   ),
+#   'CALENDAR YEAR PRICES' = list(
+#     NAME = 'CALENDAR YEAR',
+#     STATISTICCAT = 'PRICE RECEIVED',
+#     UNIT_NAME = 'CYP_UNITS',
+#     UNIT = c("$ / LB", "$ / CWT", "$ / BU", "$ / TON", "$ / CONTAINER",
+#              "$ / POT", "$ / FLAT", "$ / BUNCH", "CENTS / SPIKE", "CENTS / STEM",
+#              "CENTS / BLOOM", "$ / BASKET", "$ / LB, CHERRY BASIS", "$ / LB, GREEN BASIS"
+#     ),
+#     FREQ = 'ANNUAL',
+#     REFERENCE = 'YEAR'
+#
+#   )
+#
+# )
+#
+# columnsToKeep_ST = c('COMMODITY_GROUP','SOURCE_DESC',
+#                   'SECTOR_DESC','GROUP_DESC','COMMODITY_DESC','CLASS_DESC',
+#                   'PRODN_PRACTICE_DESC','UTIL_PRACTICE_DESC','AGG_LEVEL_DESC',
+#                   'STATE_ANSI','STATE_NAME','YEAR','FREQ_DESC')
+#
+# e=environment()
+#
+# for(vv in variableDefinitions_ST){
+#   e[[vv$NAME]] =   ss1[ss1$STATISTICCAT_DESC %in% c(vv$STATISTICCAT) &
+#                          ss1$UNIT_DESC %in% c(vv$UNIT) &
+#                          ss1$FREQ_DESC %in% c(vv$FREQ) &
+#                          ss1$REFERENCE_PERIOD_DESC %in% c(vv$REFERENCE), ]
+#   e[[vv$NAME]][[vv$NAME]] = e[[vv$NAME]][['VALUE_num']]
+#   e[[vv$NAME]][[vv$UNIT_NAME]] = e[[vv$NAME]]$UNIT_DESC
+#   e[[vv$NAME]] = e[[vv$NAME]][,c(columnsToKeep_ST,vv$NAME,
+#                                  vv$UNIT_NAME)]
+# }
+#
+# stateTables = unlist(Map(function(f)f$NAME, variableDefinitions_ST))
+#
+#
+# stateData = Reduce(function(a, f) {
+#   return(merge(a, f, by = columnsToKeep_ST, all = TRUE))
+# }, Map(function(f)
+#   e[[f]], stateTables[2:length(stateTables)]), e[[stateTables[1]]])
+# ################################################################
+# stateDatacorn <- subset(stateData,
+#                           stateData$COMMODITY_DESC=='CORN' &
+#                             stateData$AGG_LEVEL_DESC=='NATIONAL')
+#
+#
+#
+#
+#
+# #STATE DATA - MONTHLY
+# ################################################################
+# variableDefinitions_ST_m = list(
+#   'MONTHLY PRICES' = list(
+#     NAME = 'MONTHLY PRICES',
+#     STATISTICCAT = 'PRICE RECEIVED',
+#     UNIT_NAME = 'MP_UNITS',
+#     UNIT = c("$ / BOX, ON TREE EQUIV", "$ / BOX, PHD EQUIV", "$ / LB", "$ / GALLON",
+#              "$ / BARREL", "CENTS / LB", "$ / BOX", "$ / CWT", "$ / BU", "$ / TON",
+#              "$ / TON, DRY BASIS", "$ / CONTAINER", "$ / BOX, FOB", "$ / LB, CHERRY BASIS",
+#              "$ / LB, GREEN BASIS", "$ / TON, FRESH BASIS"),
+#     FREQ = 'MONTHLY',
+#     REFERENCE = c('JAN','FEB','MAR','APR','MAY','JUN',
+#                   'JUL','AUG','SEP','OCT','NOV','DEC')
+#   )
+# )
+#
+# columnsToKeep_ST_m = c('COMMODITY_GROUP','SOURCE_DESC',
+#                        'SECTOR_DESC','GROUP_DESC','COMMODITY_DESC','CLASS_DESC',
+#                        'PRODN_PRACTICE_DESC','UTIL_PRACTICE_DESC','AGG_LEVEL_DESC',
+#                        'STATE_ANSI','STATE_NAME','YEAR','FREQ_DESC')
+#
+# `MONTHLY PRICES AGG` = aggregate(`MONTHLY PRICES`~., `MONTHLY PRICES`, mean)
+#
+# stateDataM = merge(stateData, `MONTHLY PRICES AGG`, all.x=TRUE, by.x = c('MYP_UNITS', setdiff(columnsToKeep_ST,'FREQ_DESC')),by.y = c('MP_UNITS', setdiff(columnsToKeep_ST,'FREQ_DESC')))
+#
+# e=environment()
+#
+# for(vv in variableDefinitions_ST_m){
+#   e[[vv$NAME]] =   ss1[ss1$STATISTICCAT_DESC %in% c(vv$STATISTICCAT) &
+#                          ss1$UNIT_DESC %in% c(vv$UNIT) &
+#                          ss1$FREQ_DESC %in% c(vv$FREQ) &
+#                          ss1$REFERENCE_PERIOD_DESC %in% c(vv$REFERENCE), ]
+#   e[[vv$NAME]][[vv$NAME]] = e[[vv$NAME]][['VALUE_num']]
+#   e[[vv$NAME]][[vv$UNIT_NAME]] = e[[vv$NAME]]$UNIT_DESC
+#   e[[vv$NAME]] = e[[vv$NAME]][,c(columnsToKeep_ST,vv$NAME,
+#                                  vv$UNIT_NAME)]
+# }
+#
+# stateTables_m = unlist(Map(function(f)f$NAME, variableDefinitions_ST_m))
+#
+#
+# stateData_m = Reduce(function(a, f) {
+#   return(merge(a, f, by = columnsToKeep_ST_m, all = TRUE))
+# }, Map(function(f)
+#   e[[f]], stateTables_m[2:length(stateTables_m)]), e[[stateTables_m[1]]])
+# ################################################################
+#
+#
+#
+
+```
+
+### Detrending crops data
+
+```{r detrend-yield-data, caceh = cache, echo = FALSE}
+
+#unique(countyData[,c('COUNTY_ANSI','COMMODITY_DESC')])
+
+```
+
+## Climate data
+
+```{r prepare-weather-data, cache = cache, echo = FALSE}
+
+precipitation = read.csv('ftp://ftp.ncdc.noaa.gov/pub/data/cirs/climdiv/climdiv-pcpncy-v1.0.0-20211206',sep='\t', header = FALSE)
+temperature = read.csv('ftp://ftp.ncdc.noaa.gov/pub/data/cirs/climdiv/climdiv-tmpccy-v1.0.0-20211206',sep='\t', header = FALSE)
+
+
+mapState = c(
+  `01`='01',
+`02`='04',
+`03`='05',
+`04`='06',
+`05`='08',
+`06`='09',
+`07`='10',
+`08`='12',
+`09`='13',
+`10`='16',
+`11`='17',
+`12`='18',
+`13`='19',
+`14`='20',
+`15`='21',
+`16`='22',
+`17`='23',
+`18`='24',
+`19`='25',
+`20`='26',
+`21`='27',
+`22`='28',
+`23`='29',
+`24`='30',
+`25`='31',
+`26`='32',
+`27`='33',
+`28`='34',
+`29`='35',
+`30`='36',
+`31`='37',
+`32`='38',
+`33`='39',
+`34`='40',
+`35`='41',
+`36`='42',
+`37`='44',
+`38`='45',
+`39`='46',
+`40`='47',
+`41`='48',
+`42`='49',
+`43`='50',
+`44`='51',
+`45`='53',
+`46`='54',
+`47`='55',
+`48`='56'
+)
+
+precipitationFormatted = within(precipitation,{
+  FIPS = as.numeric(paste0(mapState[substr(V1,1,2)], substr(V1,3,5)))
+  element = substr(V1,6,7)
+  year = as.numeric(substr(V1,8,11))
+  `01` =  as.numeric(substr(V1,12,18))
+  `02` =  as.numeric(substr(V1,19,25))
+  `03` =  as.numeric(substr(V1,26,32))
+  `04` =  as.numeric(substr(V1,33,39))
+  `05` =  as.numeric(substr(V1,40,46))
+  `06` =  as.numeric(substr(V1,47,53))
+  `07` =  as.numeric(substr(V1,54,60))
+  `08` =  as.numeric(substr(V1,61,67))
+  `09` =  as.numeric(substr(V1,68,74))
+  `10` =  as.numeric(substr(V1,75,81))
+  `11` =  as.numeric(substr(V1,82,88))
+  `12` =  as.numeric(substr(V1,89,95))
+  V1=NULL
+})
+
+temperatureFormatted = within(temperature,{
+  FIPS = as.numeric(paste0(mapState[substr(V1,1,2)], substr(V1,3,5)))
+  element = substr(V1,6,7)
+  year = as.numeric(substr(V1,8,11))
+  `01` =  as.numeric(substr(V1,12,18))
+  `02` =  as.numeric(substr(V1,19,25))
+  `03` =  as.numeric(substr(V1,26,32))
+  `04` =  as.numeric(substr(V1,33,39))
+  `05` =  as.numeric(substr(V1,40,46))
+  `06` =  as.numeric(substr(V1,47,53))
+  `07` =  as.numeric(substr(V1,54,60))
+  `08` =  as.numeric(substr(V1,61,67))
+  `09` =  as.numeric(substr(V1,68,74))
+  `10` =  as.numeric(substr(V1,75,81))
+  `11` =  as.numeric(substr(V1,82,88))
+  `12` =  as.numeric(substr(V1,89,95))
+  V1=NULL
+})
+
+
+precipitationMonthly =  reshape2::melt(precipitationFormatted, id.vars = c('year','element','FIPS'))
+temperatureMonthly =  reshape2::melt(temperatureFormatted, id.vars = c('year','element','FIPS'))
+
+
+precipitationMonthly$date = as.Date(sprintf('%s-%s-01', precipitationMonthly$year, precipitationMonthly$variable))
+temperatureMonthly$date = as.Date(sprintf('%s-%s-01', temperatureMonthly$year, temperatureMonthly$variable))
+
+precipitationMonthly = precipitationMonthly[complete.cases(precipitationMonthly) & precipitationMonthly$value>0,]
+temperatureMonthly = temperatureMonthly[complete.cases(temperatureMonthly) & temperatureMonthly$value>0,]
+
+```
+
+```{r prepare-weather-moments-data, cache = cache, echo = FALSE}
+
+
+precipitationAnnual =  aggregate(value~FIPS+year, precipitationMonthly, mean)
+temperatureAnnual =  aggregate(value~FIPS+year, temperatureMonthly, mean)
+
+
+fipsYears = merge(precipitationAnnual,temperatureAnnual, by=c('FIPS','year'), suffixes=c('prec','temp'))
+
+cl = parallel::makeCluster(parallel::detectCores())
+
+parallel::clusterExport(cl,c('fipsYears'))
+
+tictoc::tic()
+
+parResults = parallel::parLapply(cl,1:NROW(fipsYears), function(nn){
+  curRow = fipsYears[nn,]
+
+  relData = fipsYears[fipsYears$FIPS==curRow$FIPS & fipsYears$year %in% (curRow$year-29):curRow$year,]
+
+  if(NROW(relData)==30){
+  tempMoments = moments::all.moments(relData$valuetemp, order.max = 4, central = TRUE)
+  precMoments = moments::all.moments(relData$valueprec, order.max = 4, central = TRUE)
+>>>>>>> 9f87add8251cf5d606e6b6bd238abab236789bc9
 
 <!-- precipitationFormatted = within(precipitation,{ -->
 <!--   FIPS = as.numeric(paste0(mapState[substr(V1,1,2)], substr(V1,3,5))) -->
@@ -668,6 +1357,14 @@ The continuous changes to climate represents another distinct cost to the societ
 <!--   V1=NULL -->
 <!-- }) -->
 
+<<<<<<< HEAD
+=======
+  }
+  return(curRow)
+
+})
+tictoc::toc()
+>>>>>>> 9f87add8251cf5d606e6b6bd238abab236789bc9
 
 <!-- precipitationMonthly =  reshape2::melt(precipitationFormatted, id.vars = c('year','element','FIPS')) -->
 <!-- temperatureMonthly =  reshape2::melt(temperatureFormatted, id.vars = c('year','element','FIPS')) -->
